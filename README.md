@@ -2,8 +2,12 @@
 
 5대 리그(분데스리가·라리가·프리미어리그·세리에A·리그1) 축구 선수의 시즌 스탯으로
 Transfermarkt 시장 가치를 예측하는 풀스택 웹앱. 포지션 그룹(8개)마다 별도의
-XGBoost 모델을 학습해서, 검색한 선수의 예상 시장 가치를 보여주고 임의의 스탯을
-입력해 "이런 활약을 하면 몸값이 얼마나 될까"를 시뮬레이션해볼 수 있다.
+XGBoost/LightGBM 모델을 학습해서, 검색한 선수의 예상 시장 가치를 보여주고 임의의
+스탯을 입력해 "이런 활약을 하면 몸값이 얼마나 될까"를 시뮬레이션해볼 수 있다.
+
+**모델 성능**: 데이터 누수를 잡고 정직하게 재검증한 R²를 기준으로, 피처 추가와
+하이퍼파라미터 재탐색을 거쳐 8개 포지션 평균 **66.0% → 72.2%**까지 끌어올렸다
+(자세한 단계별 수치는 [`ml/reports/model_evaluation.md`](ml/reports/model_evaluation.md)).
 
 ## 데모 흐름
 1. 선수 이름 검색 → 기본 정보(포지션/나이/현재 시장가치/모델 예측값) 확인
@@ -16,9 +20,10 @@ XGBoost 모델을 학습해서, 검색한 선수의 예상 시장 가치를 보�
 frontend/  (바닐라 HTML/CSS/JS)  ──HTTP──▶  backend/app.py (Flask)
                                               │
                                               ├─ backend/features.py   (피처 엔지니어링, 학습·서빙 공용)
-                                              ├─ backend/models/model_bundle.pkl  (포지션별 XGBoost 8개)
+                                              ├─ backend/models/model_bundle.pkl  (포지션별 XGBoost/LightGBM 8개)
                                               └─ data/player_with_pred.xlsx (선수 조회용)
 
+ml/tune.py   → 선수 단위 GroupKFold 기준 Optuna 하이퍼파라미터 재탐색 (선택적, 결과: ml/reports/best_params.json)
 ml/train.py + ml/notebooks/model_training.ipynb  → 모델 학습, backend/models/model_bundle.pkl 생성
 ml/data_pipeline/                                 → 원본 데이터 수집 스크립트 (FotMob/Transfermarkt)
 ```
@@ -27,7 +32,10 @@ ml/data_pipeline/                                 → 원본 데이터 수집 �
 ```bash
 pip install -r requirements.txt
 
-# (모델을 이미 backend/models/model_bundle.pkl로 갖고 있다면 이 단계는 생략 가능)
+# (선택, 수십 분 소요) 하이퍼파라미터 재탐색 — 결과가 이미 ml/reports/best_params.json에 있음
+python ml/tune.py --trials 40
+
+# 모델을 이미 backend/models/model_bundle.pkl로 갖고 있다면 이 단계는 생략 가능
 python ml/train.py
 
 cd backend
@@ -73,22 +81,45 @@ python app.py
    [`ml/data_pipeline/`](ml/data_pipeline/)로 옮기고 원본은
    [`docs/archive/_deprecated/`](docs/archive/_deprecated/)에 보관했다.
 
+## 성능 개선 2라운드
+버그를 고쳐 정직하게 측정한 R²(평균 66.0%)를 기준으로, 추가로 세 가지를 시도해서
+평균 72.2%까지 올렸다. 자세한 포지션별 수치는
+[`ml/reports/model_evaluation.md`](ml/reports/model_evaluation.md).
+
+1. **새 피처 3종** (`backend/features.py`): 리그 원-핫(같은 스탯이라도 프리미어리그
+   선수가 체계적으로 더 비싸게 평가되는 "재정 프리미엄" 반영), 커리어 시즌차수,
+   2시즌 이동평균(노이즈가 큰 단일 시즌 변화량 보완). 이것만으로 8개 포지션 전부
+   개선됐고, `리그_Premier League`는 실제로 대부분 포지션에서 상위 6위 안에 드는
+   중요 피처로 확인됐다.
+2. **정직한 하이퍼파라미터 재탐색** (`ml/tune.py`): 기존 파라미터(`max_depth` 최대
+   19)는 데이터 누수가 있던 지표로 튜닝됐을 가능성이 컸다. 선수 단위 `GroupKFold`
+   교차검증을 목적함수로 Optuna 재탐색을 돌렸고, 탐색 공간 자체를 `max_depth 3~8`로
+   제한해 과도하게 복잡한 트리가 애초에 나오지 않게 했다.
+3. **XGBoost vs LightGBM 정식 비교**: 포지션별로 교차검증 점수가 더 높은 모델을
+   채택 (측면 미드필더·측면 수비수는 LightGBM). 두 모델을 평균하는 앙상블도
+   테스트했지만 이득이 작고 일관되지 않아(최대 +0.9%p, 3개 포지션에서는 오히려
+   더 나쁨) 채택하지 않았다 — 시도했다는 근거와 함께 리포트에 남겨뒀다.
+
 ## 알려진 한계
-- **측면 미드필더** 포지션은 표본이 356건(162명)으로 적어 R²가 40% 수준으로 낮다.
+- **측면 미드필더** 포지션은 표본이 356건(162명)으로 적어, 개선 후에도 R²가 50%
+  수준으로 다른 포지션보다 낮다. 근본적으로는 더 많은 데이터가 필요하다.
 - 시즌 스탯만으로는 브랜드 가치·이적시장 하이프를 설명하지 못해, 슈퍼스타
-  (메시, 음바페, 손흥민 등)는 일관되게 과소평가된다.
+  (메시, 음바페, 손흥민, 케인 등)는 피처/모델을 개선해도 일관되게 과소평가된다.
 - 지금의 "선수 단위 그룹 분할"도 실제 배포 시나리오(과거 시즌으로 학습해 미래
   시즌을 예측)보다는 관대한 검증이다. 더 엄격하게 보려면 시즌 기준 시간 분할이
   필요하다.
+- `/api/predict`의 커리어 시즌차수·2시즌평균은 실시간 입력에서 실제 이력을 모르므로
+  근사치로 계산한다 (`prev_stats`가 있으면 "2년차 이상"으로 간주).
 - 프런트엔드 6개 HTML 페이지에 header/footer/button CSS가 상당 부분 중복되어
   있다. 기능상 문제는 없지만 `frontend/static/css`로 추출해 공용화하면 더
   깔끔해질 부분으로 남겨뒀다 (브라우저로 직접 확인하며 진행하는 게 안전해서
   이번 작업 범위에서는 보류).
 
 ## 기술 스택
-- **Backend**: Flask, SQLite(회원/즐겨찾기), XGBoost, scikit-learn, pandas
+- **Backend**: Flask, SQLite(회원/즐겨찾기), XGBoost, LightGBM, scikit-learn, pandas
 - **Frontend**: 바닐라 HTML/CSS/JS (프레임워크 없음)
-- **ML**: 포지션별 XGBoost 회귀, `GroupShuffleSplit` + early stopping
+- **ML**: 포지션별 XGBoost/LightGBM 회귀, `GroupShuffleSplit`/`GroupKFold` + early stopping,
+  Optuna 하이퍼파라미터 재탐색
 
 ## 폴더 구조
 ```

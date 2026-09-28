@@ -8,8 +8,12 @@ pandas>=2.0
 numpy>=1.26
 scikit-learn>=1.3
 xgboost>=2.0
+lightgbm>=4.0
 joblib>=1.3
 openpyxl>=3.1.5
+
+# 하이퍼파라미터 재탐색 (ml/tune.py, 선택적)
+optuna>=4.0
 
 # 데이터 수집 (ml/data_pipeline, 선택적)
 selenium>=4.15

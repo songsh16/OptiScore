@@ -328,6 +328,7 @@ def api_player():
 
     birth = row.get("birth") or row.get("date of birth") or row.get("생년월일")
     position = row.get("position") or row.get("pos") or row.get("포지션")
+    league = row.get("league") or row.get("리그")
     present_value = row.get("present market value") or row.get("present_value") or row.get("시장가치")
     predicted_value = row.get("predicted market value") or row.get("predicted_value") or row.get("예측시장가치")
 
@@ -335,6 +336,7 @@ def api_player():
         "name": safe_str(row.get(name_col) or raw_name),
         "birth": safe_str(birth),
         "position": safe_str(position),
+        "league": safe_str(league),
         "present_value": safe_str(present_value),
         "predicted_value": safe_str(predicted_value),
     }
@@ -356,6 +358,7 @@ def api_features():
     return jsonify(
         ok=True,
         positions=features.POSITION_GROUPS,
+        leagues=features.TOP_5_LEAGUES,
         stat_fields=features.RAW_STAT_FIELDS,
         change_tracked_stats=features.STATS_FOR_CHANGE,
     ), 200
@@ -382,6 +385,7 @@ def api_predict():
     age = to_float(data.get("age"))
     prev_market_value = to_float(data.get("prev_market_value"))
     injury_days = to_float(data.get("injury_days"))
+    league = (data.get("league") or "").strip() or None
     current_stats = {k: to_float(v) for k, v in (data.get("current_stats") or {}).items()}
     prev_stats = {k: to_float(v) for k, v in (data.get("prev_stats") or {}).items()}
 
@@ -394,6 +398,7 @@ def api_predict():
         current_stats=current_stats,
         prev_stats=prev_stats,
         feature_cols=model_info["feature_cols"],
+        league=league,
     )
 
     try:

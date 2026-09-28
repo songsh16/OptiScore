@@ -14,10 +14,19 @@
   4. n_estimators가 최대 1900, max_depth가 최대 19인 기존 튜닝값을 그대로
      쓰되 early_stopping_rounds로 실제 트리 수를 제한해 과적합을 억제한다.
 
+성능 개선 2라운드 (ml/reports/model_evaluation.md 참고):
+  5. 리그 원-핫, 커리어 시즌차수, 2시즌 이동평균 3종 피처 추가 (backend/features.py).
+  6. `ml/tune.py`로 선수 단위 GroupKFold 기준 하이퍼파라미터를 재탐색해서
+     `LEGACY_XGB_PARAMS`(원래 랜덤 분할 기준으로 튜닝됐을 값)를 대체한다.
+     `ml/reports/best_params.json`이 있으면 그쪽을 자동으로 쓴다 (없으면
+     LEGACY_XGB_PARAMS로 대체).
+  7. 포지션별로 XGBoost/LightGBM 중 GroupKFold CV R²가 더 높은 쪽을 채택한다.
+
 실행:
-    python ml/train.py
+    python ml/tune.py --trials 40    # (선택) 하이퍼파라미터 재탐색, 수십 분 소요
+    python ml/train.py               # 최종 모델 학습 + 저장
 출력:
-    backend/models/model_bundle.pkl   ({포지션: {model, feature_cols}})
+    backend/models/model_bundle.pkl   ({포지션: {model, feature_cols, model_type}})
     data/player_with_pred.xlsx        (전체 선수에 대한 예측값 포함)
     ml/reports/results.json           (아래 model_evaluation.md 작성에 쓰는 원자료)
 """
@@ -32,19 +41,25 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
-from xgboost import XGBRegressor
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT / "ml"))
 import features  # noqa: E402
+from model_factory import MODEL_FACTORIES  # noqa: E402
 
 DATA_PATH = ROOT / "data" / "player.xlsx"
 BUNDLE_PATH = ROOT / "backend" / "models" / "model_bundle.pkl"
 PRED_PATH = ROOT / "data" / "player_with_pred.xlsx"
 RESULTS_PATH = ROOT / "ml" / "reports" / "results.json"
+BEST_PARAMS_PATH = ROOT / "ml" / "reports" / "best_params.json"
 
-# 기존 노트북에서 가져온 포지션별 최적 하이퍼파라미터 (변경 없음).
-BEST_PARAMS = {
+# 원래 노트북에서 가져온 포지션별 하이퍼파라미터. ml/tune.py로 GroupKFold 기준
+# 재탐색한 결과(ml/reports/best_params.json)가 있으면 그쪽을 우선 쓴다 —
+# 이 값들은 max_depth가 최대 19까지 올라가는 등 데이터 누수가 있던 원래
+# 랜덤 분할 기준으로 튜닝됐을 가능성이 커서, 재탐색 결과가 없을 때의
+# fallback으로만 남겨둔다.
+LEGACY_XGB_PARAMS = {
     "공격형 미드필더": {"n_estimators": 1900, "learning_rate": 0.020762320977301275, "max_depth": 13, "subsample": 0.3856052273527386, "colsample_bytree": 0.7980135471467072, "reg_alpha": 0.00016282406660088258, "reg_lambda": 0.03482118513318421},
     "수비형 미드필더": {"n_estimators": 1400, "learning_rate": 0.022491096898892622, "max_depth": 19, "subsample": 0.427399045217705, "colsample_bytree": 0.7536284027955273, "reg_alpha": 6.530905564075279e-07, "reg_lambda": 0.028399498223413196},
     "스트라이커": {"n_estimators": 1600, "learning_rate": 0.011723795540417655, "max_depth": 15, "subsample": 0.4014413443070366, "colsample_bytree": 0.7460919009335952, "reg_alpha": 1.7387604754886692e-07, "reg_lambda": 3.6656893204449398e-06},
@@ -56,6 +71,31 @@ BEST_PARAMS = {
 }
 
 MIN_GROUP_SIZE = 20
+
+
+def load_position_configs() -> dict:
+    """
+    포지션별 {model_type, params}를 결정한다. ml/tune.py가 만든
+    ml/reports/best_params.json이 있으면 XGBoost/LightGBM 중 CV R²가 더
+    높은 쪽을 쓰고, 없으면 기존 노트북의 XGBoost 파라미터로 대체한다.
+    """
+    if BEST_PARAMS_PATH.exists():
+        with open(BEST_PARAMS_PATH, encoding="utf-8") as f:
+            tuned = json.load(f)
+        configs = {}
+        for position, candidates in tuned.items():
+            best_type = max(candidates, key=lambda t: candidates[t]["cv_r2"])
+            configs[position] = {
+                "model_type": best_type,
+                "params": candidates[best_type]["params"],
+                "cv_r2": candidates[best_type]["cv_r2"],
+            }
+        return configs
+
+    return {
+        position: {"model_type": "xgboost", "params": params, "cv_r2": None}
+        for position, params in LEGACY_XGB_PARAMS.items()
+    }
 
 
 def load_raw() -> pd.DataFrame:
@@ -76,11 +116,13 @@ def _make_xy(group_df: pd.DataFrame):
     return X, y
 
 
-def _eval_naive_split(X: pd.DataFrame, y: pd.Series, params: dict) -> dict:
+def _eval_naive_split(X: pd.DataFrame, y: pd.Series, model_type: str, params: dict) -> dict:
     """기존 코드와 동일한 완전 랜덤 분할 (비교용, 데이터 누수 있음)."""
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model = XGBRegressor(objective="reg:squarederror", **params, random_state=42, n_jobs=-1)
-    model.fit(X_train, y_train, verbose=False)
+    # 조기 종료용으로 train을 한 번 더 쪼갠다 (naive 쪽도 동일한 학습 방식으로 맞춤).
+    X_fit, X_es, y_fit, y_es = train_test_split(X_train, y_train, test_size=0.15, random_state=42)
+    model, fit_kwargs = MODEL_FACTORIES[model_type](params, X_es, y_es)
+    model.fit(X_fit, y_fit, **fit_kwargs)
     y_pred = np.expm1(model.predict(X_test))
     y_true = np.expm1(y_test)
     return {
@@ -89,7 +131,7 @@ def _eval_naive_split(X: pd.DataFrame, y: pd.Series, params: dict) -> dict:
     }
 
 
-def _eval_grouped_split(X: pd.DataFrame, y: pd.Series, groups: pd.Series, params: dict):
+def _eval_grouped_split(X: pd.DataFrame, y: pd.Series, groups: pd.Series, model_type: str, params: dict):
     """선수 단위 그룹 분할 (수정된 방식) + 조기 종료로 과적합 억제."""
     splitter = GroupShuffleSplit(test_size=0.2, n_splits=1, random_state=42)
     train_idx, test_idx = next(splitter.split(X, y, groups))
@@ -103,23 +145,27 @@ def _eval_grouped_split(X: pd.DataFrame, y: pd.Series, groups: pd.Series, params
     X_fit, X_val = X_train.iloc[fit_idx], X_train.iloc[val_idx]
     y_fit, y_val = y_train.iloc[fit_idx], y_train.iloc[val_idx]
 
-    model = XGBRegressor(
-        objective="reg:squarederror", **params, random_state=42, n_jobs=-1,
-        early_stopping_rounds=50, eval_metric="rmse",
-    )
-    model.fit(X_fit, y_fit, eval_set=[(X_val, y_val)], verbose=False)
+    model, fit_kwargs = MODEL_FACTORIES[model_type](params, X_val, y_val)
+    model.fit(X_fit, y_fit, **fit_kwargs)
 
     log_pred_test = model.predict(X_test)
     y_pred = np.expm1(log_pred_test)
     y_true = np.expm1(y_test)
 
+    # XGBoost는 .best_iteration, LightGBM은 .best_iteration_ 에 조기 종료 결과를 담는다.
+    best_iter = getattr(model, "best_iteration", None) or getattr(model, "best_iteration_", None)
     metrics = {
         "r2": r2_score(y_test, log_pred_test),
         "rmse": float(np.sqrt(mean_squared_error(y_true, y_pred))),
-        "best_iteration": int(model.best_iteration) if model.best_iteration is not None else params["n_estimators"],
+        "best_iteration": int(best_iter) if best_iter is not None else params["n_estimators"],
     }
 
-    importances = sorted(zip(model.feature_importances_, X.columns), reverse=True)
+    # XGBoost의 feature_importances_는 이미 합이 1인 비율이지만, LightGBM 기본값
+    # (split 횟수)은 그렇지 않다. 모델 종류에 상관없이 비교 가능하도록 정규화한다.
+    raw_importances = np.asarray(model.feature_importances_, dtype=float)
+    total = raw_importances.sum()
+    normalized = raw_importances / total if total > 0 else raw_importances
+    importances = sorted(zip(normalized, X.columns), reverse=True)
     imp_df = pd.DataFrame(importances, columns=["importance", "feature"]).head(15)
 
     err_df = X_test.copy()
@@ -133,6 +179,7 @@ def _eval_grouped_split(X: pd.DataFrame, y: pd.Series, groups: pd.Series, params
 def train_all(df: pd.DataFrame) -> dict:
     results = {}
     bundle = {}
+    position_configs = load_position_configs()
 
     for position in features.POSITION_GROUPS:
         group_df = df[df["포지션_그룹"] == position].copy()
@@ -140,17 +187,20 @@ def train_all(df: pd.DataFrame) -> dict:
             print(f"건너뜀: {position} (데이터 {len(group_df)}건)")
             continue
 
-        params = BEST_PARAMS[position]
+        config = position_configs[position]
+        model_type, params = config["model_type"], config["params"]
         X, y = _make_xy(group_df)
         groups = group_df["name_key"]
 
-        naive_metrics = _eval_naive_split(X, y, params)
-        model, grouped_metrics, imp_df, err_df = _eval_grouped_split(X, y, groups, params)
+        naive_metrics = _eval_naive_split(X, y, model_type, params)
+        model, grouped_metrics, imp_df, err_df = _eval_grouped_split(X, y, groups, model_type, params)
 
-        bundle[position] = {"model": model, "feature_cols": list(X.columns)}
+        bundle[position] = {"model": model, "feature_cols": list(X.columns), "model_type": model_type}
         results[position] = {
             "n_rows": len(group_df),
             "n_players": group_df["name_key"].nunique(),
+            "model_type": model_type,
+            "tuning_cv_r2": config["cv_r2"],
             "naive_split": naive_metrics,
             "grouped_split": grouped_metrics,
             "top_features": imp_df.to_dict("records"),
@@ -162,7 +212,7 @@ def train_all(df: pd.DataFrame) -> dict:
                 .head(5).to_dict("records"),
         }
         print(
-            f"{position}: 랜덤분할 R²={naive_metrics['r2']:.2%} -> 그룹분할 R²={grouped_metrics['r2']:.2%} "
+            f"{position} [{model_type}]: 랜덤분할 R²={naive_metrics['r2']:.2%} -> 그룹분할 R²={grouped_metrics['r2']:.2%} "
             f"(n={len(group_df)}, best_iter={grouped_metrics['best_iteration']})"
         )
 

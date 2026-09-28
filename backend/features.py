@@ -97,7 +97,19 @@ def clean_numeric(value):
 
 
 def group_position_detailed(position) -> str:
-    pos = str(position).lower()
+    """
+    Transfermarkt 원본처럼 세부 포지션 문자열("오른쪽 윙어", "왼쪽 수비수" 등)이
+    들어오면 8개 그룹 중 하나로 묶는다. 이미 그룹명 자체("측면 수비수" 등)가
+    들어온 경우도 그대로 인정한다 — 예측 폼의 포지션 드롭다운이 그룹명을 직접
+    보내는데, 원래 이 함수는 "왼쪽 수비수"/"오른쪽 수비수" 같은 세부 명칭만
+    인식하고 "측면 수비수"라는 그룹명 자체는 매칭하지 못해 항상 '기타'로
+    떨어지는 버그가 있었다.
+    """
+    raw = str(position).strip()
+    if raw in POSITION_GROUPS:
+        return raw
+
+    pos = raw.lower()
     if "중앙 수비수" in pos:
         return "중앙 수비수"
     if "수비형 미드필더" in pos:
@@ -144,9 +156,19 @@ def engineer_batch(df: pd.DataFrame) -> pd.DataFrame:
 
     df["나이_제곱"] = df["시즌종료시점만나이"] ** 2
 
+    # 커리어 시즌차수: 이 선수가 데이터셋에서 몇 번째 시즌인지 (1부터 시작).
+    # 나이와는 별개로 "얼마나 이 리그에서 검증됐는가"를 나타내는 신호.
+    df["커리어_시즌차수"] = df.groupby("name_key").cumcount() + 1
+    has_prev = df["커리어_시즌차수"] > 1
+
     for stat in STATS_FOR_CHANGE:
         df[f"전시즌_{stat}"] = df.groupby("name_key")[stat].shift(1).fillna(0)
         df[f"{stat}_변화량"] = df[stat] - df[f"전시즌_{stat}"]
+        # 단일 시즌 변화량은 노이즈가 크므로, 최근 2개 시즌 평균도 함께 본다.
+        # 직전 시즌 기록이 없는 데뷔 시즌은 이번 시즌 값 자체를 평균으로 쓴다.
+        df[f"{stat}_2시즌평균"] = np.where(
+            has_prev, (df[stat] + df[f"전시즌_{stat}"]) / 2, df[stat]
+        )
 
     df["나이x득점_변화량"] = df["시즌종료시점만나이"] * df["득점_변화량"]
     df["슛_대비_득점율"] = np.divide(
@@ -157,6 +179,12 @@ def engineer_batch(df: pd.DataFrame) -> pd.DataFrame:
     df["log_전시즌_시장가치"] = np.log1p(df["전시즌_시장가치_EUR"])
     df["log_현재_시장가치"] = np.log1p(df["TM_시장가치_EUR"])
     df["시장가치_변화량"] = df["TM_시장가치_EUR"] - df["전시즌_시장가치_EUR"]
+
+    # 리그 원-핫: 5대 리그라도 평균 몸값 수준(특히 프리미어리그의 "재정 프리미엄")이
+    # 달라서, 같은 스탯이라도 리그에 따라 시장가치가 체계적으로 다르다.
+    for league in TOP_5_LEAGUES:
+        df[f"리그_{league}"] = (df["리그"] == league).astype(float)
+
     return df
 
 
@@ -175,13 +203,18 @@ def engineer_single(
     current_stats: dict,
     prev_stats: dict,
     feature_cols: list[str],
+    league: str | None = None,
 ) -> pd.DataFrame:
     """
     실사용자가 입력한 원본 스탯 한 건을 학습 때와 동일한 피처로 변환한다.
     (노트북의 predict_custom_player()를 프로덕션 코드로 승격한 버전)
+
+    커리어 시즌차수는 실제로는 알 수 없으므로, prev_stats가 하나라도 있으면
+    "2년차 이상"(has_prev=True), 없으면 "데뷔 시즌"으로 근사한다.
     """
     current_stats = current_stats or {}
     prev_stats = prev_stats or {}
+    has_prev = bool(prev_stats)
 
     row = pd.DataFrame(0.0, index=[0], columns=feature_cols)
 
@@ -197,11 +230,18 @@ def engineer_single(
         row["나이_제곱"] = age ** 2
     if "log_전시즌_시장가치" in row.columns:
         row["log_전시즌_시장가치"] = np.log1p(max(prev_market_value, 0))
+    if "커리어_시즌차수" in row.columns:
+        row["커리어_시즌차수"] = 2 if has_prev else 1
 
     for stat in STATS_FOR_CHANGE:
-        col = f"{stat}_변화량"
-        if col in row.columns:
-            row[col] = current_stats.get(stat, 0) - prev_stats.get(stat, 0)
+        change_col = f"{stat}_변화량"
+        avg_col = f"{stat}_2시즌평균"
+        curr_val = current_stats.get(stat, 0)
+        prev_val = prev_stats.get(stat, 0)
+        if change_col in row.columns:
+            row[change_col] = curr_val - prev_val
+        if avg_col in row.columns:
+            row[avg_col] = (curr_val + prev_val) / 2 if has_prev else curr_val
 
     if "나이x득점_변화량" in row.columns:
         goal_change = current_stats.get("득점", 0) - prev_stats.get("득점", 0)
@@ -211,5 +251,10 @@ def engineer_single(
         goals = current_stats.get("득점", 0)
         shots = current_stats.get("슛", 0)
         row["슛_대비_득점율"] = goals / shots if shots > 0 else 0
+
+    if league:
+        league_col = f"리그_{league}"
+        if league_col in row.columns:
+            row[league_col] = 1.0
 
     return row

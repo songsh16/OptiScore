@@ -404,6 +404,10 @@
             <select id="field-position" class="field-input"></select>
           </div>
           <div class="field">
+            <label class="field-label" for="field-league">League :</label>
+            <select id="field-league" class="field-input"></select>
+          </div>
+          <div class="field">
             <label class="field-label" for="field-age">Age (season end) :</label>
             <input id="field-age" class="field-input" type="number" min="0" />
           </div>
@@ -497,6 +501,7 @@
       const nameInput       = document.getElementById("field-name");
       const birthInput      = document.getElementById("field-birth");
       const positionSelect  = document.getElementById("field-position");
+      const leagueSelect    = document.getElementById("field-league");
       const ageInput        = document.getElementById("field-age");
       const prevValueInput  = document.getElementById("field-prev-value");
       const injuryDaysInput = document.getElementById("field-injury-days");
@@ -604,6 +609,9 @@
           birthInput.value   = p.birth || "";
           presentInput.value = p.present_value || "";
           guessPositionOption(p.position || "");
+          if (p.league && Array.from(leagueSelect.options).some(o => o.value === p.league)) {
+            leagueSelect.value = p.league;
+          }
 
           playerTitle.textContent = `Prediction – ${currentPlayerName}`;
           updatePhotoCard(currentPlayerName);
@@ -713,6 +721,10 @@
             .map(pos => `<option value="${pos}">${pos}</option>`)
             .join("");
 
+          leagueSelect.innerHTML = (data.leagues || [])
+            .map(lg => `<option value="${lg}">${lg}</option>`)
+            .join("");
+
           changeTrackedStats = data.change_tracked_stats || [];
           renderStatFields(currentStatsContainer, data.stat_fields || [], "currentStat");
           renderStatFields(prevStatsContainer, changeTrackedStats, "prevStat");
@@ -755,6 +767,7 @@
 
         const payload = {
           position,
+          league: leagueSelect.value,
           age: Number(ageInput.value) || 0,
           prev_market_value: Number((prevValueInput.value || "0").replace(/,/g, "")) || 0,
           injury_days: Number(injuryDaysInput.value) || 0,
