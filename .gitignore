@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# 로컬 DB (init_db()가 자동 생성함 — 실제 유저 데이터를 저장소에 올리지 않음)
+backend/users.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 환경변수
+.env
