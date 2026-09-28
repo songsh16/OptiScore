@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Optiscore – Player</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont,
+        "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 1.5rem 3rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      color: #00AF5F;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+
+    .fav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #374151;
+      transition: 0.2s ease;
+    }
+
+    .fav-btn span.heart {
+      font-size: 1.05rem;
+      transition: transform 0.2s ease;
+    }
+
+    .fav-btn.active {
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #b91c1c;
+    }
+
+    .fav-btn.active span.heart {
+      transform: scale(1.15);
+    }
+
+    .player-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    .player-card {
+      width: 100%;
+      max-width: 720px;
+      border-radius: 24px;
+      padding: 2.4rem 2.6rem;
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.15);
+      border: 1px solid #e5e7eb;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 2rem;
+    }
+
+    .info-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 0.6rem;
+    }
+
+    .info-subtitle {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin-bottom: 1.5rem;
+    }
+
+    .info-list {
+      font-size: 0.95rem;
+      line-height: 1.9;
+    }
+
+    .label {
+      display: inline-block;
+      width: 160px;
+      color: #6b7280;
+    }
+
+    .value {
+      font-weight: 600;
+    }
+
+    .actions {
+      margin-top: 2rem;
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+    }
+
+    .btn-secondary {
+      padding: 0.7rem 1.8rem;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #f3f4f6;
+    }
+
+    .btn-primary {
+      padding: 0.7rem 2.4rem;
+      background: #00AF5F;
+      border: none;
+      color: white;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .btn-primary:hover {
+      background: #0A8F4B;
+    }
+
+    .error-box {
+      margin-top: 1rem;
+      font-size: 0.86rem;
+      color: #ef4444;
+      min-height: 1.1rem;
+    }
+
+    .footer {
+      background: #000;
+      color: #e5e7eb;
+      padding: .8rem;
+      text-align: center;
+      font-size: .8rem;
+      margin-top: auto;
+    }
+
+    .photo-box {
+  width: 100%;
+  aspect-ratio: 3/4;
+  border-radius: 24px;
+  background: #111827;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+  color: #f9fafb;
+  text-align: center;
+}
+
+/* 이니셜 동그라미 */
+.photo-initial {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  border: 2px solid #00AF5F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+/* 이름 텍스트 */
+.photo-name-text {
+  font-size: 0.9rem;
+  line-height: 1.3;
+  opacity: 0.9;
+}
+
+  </style>
+</head>
+
+<body>
+  <!-- 헤더 -->
+  <header class="header">
+    <div class="logo" id="logo">OPTISCORE</div>
+    <button class="fav-btn" id="fav-btn">
+      <span class="heart">♡</span>
+      <span class="text">Save player</span>
+    </button>
+  </header>
+
+  <!-- 본문 -->
+  <div class="player-wrapper">
+    <main class="player-card">
+      <div class="photo-box">
+         <div class="photo-initial" id="player-photo-initial">?</div>
+         <div class="photo-name-text" id="player-photo-name">No player selected</div>
+      </div>
+
+
+      <div>
+        <h1 class="info-title" id="p-name">Player name</h1>
+        <p class="info-subtitle">Compare and analyze this player's market value.</p>
+
+        <div class="info-list">
+          <div><span class="label">Birth :</span> <span class="value" id="p-birth">-</span></div>
+          <div><span class="label">Position :</span> <span class="value" id="p-position">-</span></div>
+          <div><span class="label">Present Market Value :</span> <span class="value" id="p-present">-</span></div>
+          <div><span class="label">Predicted Market Value :</span> <span class="value" id="p-predicted">-</span></div>
+        </div>
+
+        <div class="actions">
+          <button class="btn-secondary" id="back-btn">Back</button>
+          <button class="btn-primary" id="predict-btn">Prediction</button>
+        </div>
+
+        <div class="error-box" id="error-box"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="footer">© 2025 Optiscore. All rights reserved.</footer>
+
+  <script>
+  window.addEventListener("DOMContentLoaded", () => {
+    const logo      = document.getElementById("logo");
+    const favBtn    = document.getElementById("fav-btn");
+    const nameEl    = document.getElementById("p-name");
+    const birthEl   = document.getElementById("p-birth");
+    const posEl     = document.getElementById("p-position");
+    const presentEl = document.getElementById("p-present");
+    const predEl    = document.getElementById("p-predicted");
+    const errorBox  = document.getElementById("error-box");
+    const backBtn   = document.getElementById("back-btn");
+    const predictBtn= document.getElementById("predict-btn");
+
+    // 🔽 사진 카드용 요소
+    const photoInitial  = document.getElementById("player-photo-initial");
+    const photoNameText = document.getElementById("player-photo-name");
+
+    // 🔽 사진 카드 업데이트 함수
+    function updatePlayerPhotoCard(name) {
+      const trimmed = (name || "").trim();
+      if (!trimmed) {
+        photoInitial.textContent = "?";
+        photoNameText.textContent = "No player selected";
+        return;
+      }
+      photoInitial.textContent = trimmed[0].toUpperCase();
+      photoNameText.textContent = trimmed;
+    }
+
+    const heartSpan = favBtn.querySelector(".heart");
+    const textSpan  = favBtn.querySelector(".text");
+
+    const params = new URLSearchParams(window.location.search);
+    const playerNameFromURL = params.get("name") || "";
+
+    let currentPlayerName = "";
+    let isLoggedIn  = false;
+    let isFavorite  = false;
+
+    if (!playerNameFromURL) {
+      errorBox.textContent = "선수 이름이 없습니다. 메인 화면에서 다시 검색해 주세요.";
+      // URL에 이름이 없으면 기본 카드 상태로
+      updatePlayerPhotoCard("");
+    }
+
+    // 로고 클릭 → 메인 페이지
+    logo.addEventListener("click", () => {
+      window.location.href = "index.html?skipIntro=1";
+    });
+
+    backBtn.addEventListener("click", () => {
+      window.history.back();
+    });
+
+    // Prediction 버튼 → prediction.html 로 이동
+    predictBtn.addEventListener("click", () => {
+      const encoded = encodeURIComponent(currentPlayerName || playerNameFromURL);
+      window.location.href = `prediction.html?name=${encoded}`;
+    });
+
+    function updateFavUI() {
+      if (isFavorite) {
+        favBtn.classList.add("active");
+        heartSpan.textContent = "♥";
+        textSpan.textContent = "Saved";
+      } else {
+        favBtn.classList.remove("active");
+        heartSpan.textContent = "♡";
+        textSpan.textContent = "Save player";
+      }
+    }
+
+    // 현재 로그인 / 찜 상태 확인
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/me", {
+          method: "GET",
+          credentials: "include",
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          isLoggedIn = false;
+          isFavorite = false;
+          updateFavUI();
+          return;
+        }
+
+        isLoggedIn = true;
+        const saved = data.user.saved_players || [];
+        isFavorite = saved.includes(currentPlayerName);
+        updateFavUI();
+      } catch (e) {
+        console.error(e);
+        isLoggedIn = false;
+        isFavorite = false;
+        updateFavUI();
+      }
+    }
+
+    // 선수 상세 정보 가져오기
+    async function loadPlayer() {
+      if (!playerNameFromURL) return;
+
+      try {
+        const res = await fetch(
+          "/api/player?name=" + encodeURIComponent(playerNameFromURL)
+        );
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          errorBox.textContent = data.message || "선수 정보를 불러오지 못했습니다.";
+          return;
+        }
+
+        const p = data.player;
+        currentPlayerName = p.name || playerNameFromURL;
+
+        nameEl.textContent    = p.name || playerNameFromURL;
+        birthEl.textContent   = p.birth || "-";
+        posEl.textContent     = p.position || "-";
+        presentEl.textContent = p.present_value || "-";
+        predEl.textContent    = p.predicted_value || "-";
+        errorBox.textContent  = "";
+
+        // ⭐ 여기에서 사진 카드 업데이트
+        updatePlayerPhotoCard(currentPlayerName);
+
+        // 선수 정보를 다 가져온 뒤 로그인 정보/찜 상태 확인
+        await loadMe();
+      } catch (e) {
+        console.error(e);
+        errorBox.textContent = "선수 정보를 불러오지 못했습니다.";
+      }
+    }
+
+    // 찜 버튼 클릭
+    favBtn.addEventListener("click", async () => {
+      if (!currentPlayerName) return;
+
+      if (!isLoggedIn) {
+        alert("선수를 저장하려면 먼저 로그인 해주세요.");
+        window.location.href = "login.html";
+        return;
+      }
+
+      const nextState = !isFavorite;
+
+      try {
+        const res = await fetch("/api/favorite", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            player_name: currentPlayerName,
+            favorite: nextState,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          alert(data.message || "찜 상태를 변경하지 못했습니다.");
+          return;
+        }
+
+        isFavorite = data.favorite;
+        updateFavUI();
+      } catch (e) {
+        console.error(e);
+        alert("서버와 통신하는 데 실패했습니다.");
+      }
+    });
+
+    // 초기 로딩
+    loadPlayer();
+  });
+</script>
+
+</body>
+</html>

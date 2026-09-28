@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Optiscore</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #00AF5F;   /* 처음엔 웰컴용 초록 배경 */
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Helvetica Neue", Arial, sans-serif;
+      height: 100vh;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ---------- INTRO ---------- */
+
+    #intro-overlay {
+      position: fixed;
+      inset: 0;
+      background: #00AF5F;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .intro-frame {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .intro-card {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .intro-card.firstpage {
+      background-color: #00AF5F;
+      z-index: 2;
+      animation: moveOutRight 2.0s ease-out forwards;
+      animation-delay: 0.7s;
+    }
+
+    .intro-card.motion {
+      background-color: #00AF5F;
+      z-index: 1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-start;
+      padding: 4rem;
+    }
+
+    .intro-text h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 1rem;
+    }
+
+    .intro-text .brand {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f9fafb;
+      opacity: 0.85;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+
+    .intro-text .tagline {
+      font-size: 0.9rem;
+      color: #f9fafb;
+      opacity: 0.8;
+    }
+
+    @keyframes moveOutRight {
+      from { transform: translateX(0); }
+      to   { transform: translateX(120%); }
+    }
+
+    /* ---------- MAIN PAGE ---------- */
+
+    #main-page {
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .page-inner {
+      width: 100%;
+      padding: 1.5rem 3rem 3.5rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: .5rem;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      color: #00AF5F;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+
+    .menu-icon {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      grid-template-rows: repeat(3,1fr);
+      gap: 3px;
+      cursor: pointer;
+    }
+
+    .menu-icon span {
+      width: 100%;
+      height: 100%;
+      border-radius: 3px;
+      background: #111827;
+    }
+
+    .hero {
+      margin-top: 3rem;
+      text-align: center;
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .hero-title {
+      font-size: 2.5rem;
+      font-weight: 800;
+      max-width: 640px;
+      margin: 0 auto 1rem;
+    }
+
+    .hero-subtitle {
+      font-size: 1rem;
+      color: #4b5563;
+      max-width: 520px;
+      margin: 0 auto 2rem;
+    }
+
+    .search-wrapper {
+      position: relative;
+      max-width: 620px;
+      margin: 0 auto;
+    }
+
+    .search-bar { display: flex; gap: .75rem; }
+
+    .search-input {
+      flex: 1;
+      padding: .9rem 1.2rem;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      font-size: .95rem;
+      outline: none;
+    }
+
+    .search-button {
+      padding: 0 1.8rem;
+      border-radius: 999px;
+      background: #00AF5F;
+      border: none;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .search-button:hover { background: #0A8F4B; }
+
+    .suggestions {
+      position: absolute;
+      left: 0;
+      right: 130px;
+      margin-top: .4rem;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 0.75rem;
+      max-height: 250px;
+      overflow-y: auto;
+      list-style: none;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      z-index: 50;
+    }
+
+    .suggestion-item {
+      padding: .7rem 1rem;
+      cursor: pointer;
+    }
+
+    .suggestion-item:hover { background: #f3f4f6; }
+
+    .footer {
+      background: #000;
+      color: #e5e7eb;
+      padding: .8rem;
+      text-align: center;
+      font-size: .8rem;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+    }
+
+    /* ---------- MENU OVERLAY ---------- */
+
+    .menu-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 175, 95, 0.88);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .menu-center {
+      display: flex;
+      flex-direction: column;
+      gap: 3rem;
+      text-align: center;
+    }
+
+    .menu-item {
+      font-size: 2.4rem;
+      font-weight: 600;
+      color: #ffffff;
+      cursor: pointer;
+      transition: 0.25s ease;
+    }
+
+    .menu-item:hover {
+      color: #111111;
+    }
+
+    .menu-profile {
+      position: absolute;
+      top: 2rem;
+      left: 2rem;
+    }
+
+    .profile-icon svg {
+      display: block;
+      color: white;
+      transition: 0.25s ease;
+    }
+
+    .profile-icon:hover svg {
+      stroke: #111;
+    }
+
+    .menu-close {
+      position: absolute;
+      top: 2rem;
+      right: 2rem;
+      font-size: 3rem;
+      cursor: pointer;
+      color: #ffffff;
+      transition: 0.25s ease;
+    }
+
+    .menu-close:hover {
+      color: #111111;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <!-- INTRO : 기본은 보이게 (hidden X) -->
+  <div id="intro-overlay">
+    <div class="intro-frame">
+      <div class="intro-card firstpage"></div>
+
+      <div class="intro-card motion">
+        <div class="intro-text">
+          <h1>Welcome</h1>
+          <div class="brand">Optiscore</div>
+          <p class="tagline">
+            we predict, analyze and compare football player's market values.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN PAGE : 처음엔 숨김 -->
+  <main id="main-page" class="hidden">
+    <div class="page-inner">
+
+      <header class="nav">
+        <div class="logo" id="logo">OPTISCORE</div>
+
+        <div class="menu-icon" id="menu-icon">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+      </header>
+
+      <section class="hero">
+        <h1 class="hero-title">Compare Football Players’ Market Values</h1>
+        <p class="hero-subtitle">
+          Search, compare, and analyze player market values instantly with Optiscore.
+        </p>
+
+        <div class="search-wrapper">
+          <div class="search-bar">
+            <input id="player-search" class="search-input" placeholder="search players by name" />
+            <button id="search-btn" class="search-button">Search</button>
+          </div>
+
+          <ul id="suggestions" class="suggestions hidden"></ul>
+        </div>
+      </section>
+
+    </div>
+
+    <footer class="footer">© 2025 Optiscore. All rights reserved.</footer>
+  </main>
+
+  <!-- MENU OVERLAY -->
+  <div id="menu-overlay" class="menu-overlay hidden">
+    <div class="menu-profile">
+      <span class="profile-icon" id="profile-btn">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
+             stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4"></circle>
+          <path d="M4 20c0-4 4-6 8-6s8 2 8 6"></path>
+        </svg>
+      </span>
+    </div>
+
+    <div class="menu-close" id="menu-close">×</div>
+
+    <div class="menu-center">
+      <div class="menu-item">Player</div>
+      <div class="menu-item">Prediction</div>
+    </div>
+  </div>
+
+<script>
+window.addEventListener("DOMContentLoaded", function () {
+
+  const intro       = document.getElementById("intro-overlay");
+  const mainPage    = document.getElementById("main-page");
+  const logo        = document.getElementById("logo");
+  const input       = document.getElementById("player-search");
+  const suggestions = document.getElementById("suggestions");
+
+  const menuIcon    = document.getElementById("menu-icon");
+  const menuOverlay = document.getElementById("menu-overlay");
+  const menuClose   = document.getElementById("menu-close");
+  const profileBtn  = document.getElementById("profile-btn");
+  const searchBtn   = document.getElementById("search-btn"); 
+  const menuItems = document.querySelectorAll(".menu-item");
+  const menuPlayer = menuItems[0];     // "Player"
+  const menuPredict = menuItems[1];    // "Prediction"
+
+  // 메뉴에서 Player 클릭 → 방금 만든 A–Z 페이지
+  if (menuPlayer) {
+    menuPlayer.addEventListener("click", () => {
+      window.location.href = "players.html";
+    });
+  }
+
+  // 메뉴에서 Prediction 클릭 → prediction.html
+  if (menuPredict) {
+    menuPredict.addEventListener("click", () => {
+      window.location.href = "prediction.html";
+    });
+  }
+  // ★ 추가
+
+  /* ?skipIntro=1 이면 웰컴 건너뛰고 바로 메인 */
+  const params    = new URLSearchParams(window.location.search);
+  const skipIntro = params.get("skipIntro") === "1";
+
+  if (skipIntro) {
+    intro.style.display = "none";
+    mainPage.classList.remove("hidden");
+    document.body.style.background = "#ffffff";
+  }
+
+  /* 인트로 클릭 → 메인 진입 */
+  intro.addEventListener("click", function () {
+    if (skipIntro) return;
+
+    intro.style.display = "none";
+    mainPage.classList.remove("hidden");
+    document.body.style.background = "#ffffff";
+  });
+
+  /* 프로필 클릭 → profile.html */
+  profileBtn.addEventListener("click", () => {
+    window.location.href = "profile.html";
+  });
+
+  /* LOGO 클릭 → 맨 위로 */
+  logo.addEventListener("click", function () {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  /* MENU OPEN/CLOSE */
+  menuIcon.addEventListener("click", () => {
+    menuOverlay.classList.remove("hidden");
+  });
+
+  menuClose.addEventListener("click", () => {
+    menuOverlay.classList.add("hidden");
+  });
+
+  menuOverlay.addEventListener("click", (e) => {
+    if (e.target === menuOverlay) {
+      menuOverlay.classList.add("hidden");
+    }
+  });
+
+  /* -------- 1단계: 서버에서 선수 목록 불러오기 -------- */
+  let players = [];
+
+  async function loadPlayers() {
+    try {
+      const res = await fetch("/api/players");
+      const data = await res.json();
+
+      if (!res.ok || !data.ok || !Array.isArray(data.players)) {
+        console.error("플레이어 목록 응답이 이상함:", data);
+        return;
+      }
+
+      players = data.players;
+      console.log("Loaded players:", players.length);
+    } catch (err) {
+      console.error("플레이어 목록 불러오기 실패:", err);
+    }
+  }
+
+  loadPlayers();
+
+  /* 자동완성 필터 */
+  input.addEventListener("input", (e) => {
+    const q = e.target.value.toLowerCase().trim();
+
+    if (!q) {
+      suggestions.classList.add("hidden");
+      return;
+    }
+
+    const matched = players
+      .filter(p => p.toLowerCase().includes(q))
+      .slice(0, 8);
+
+    if (!matched.length) {
+      suggestions.classList.add("hidden");
+      return;
+    }
+
+    suggestions.innerHTML = matched
+      .map(p => `<li class="suggestion-item">${p}</li>`)
+      .join("");
+
+    suggestions.classList.remove("hidden");
+  });
+
+  suggestions.addEventListener("click", (e) => {
+    if (e.target.classList.contains("suggestion-item")) {
+      input.value = e.target.textContent;
+      suggestions.classList.add("hidden");
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    const wrapper = document.querySelector(".search-wrapper");
+    if (wrapper && !wrapper.contains(e.target)) {
+      suggestions.classList.add("hidden");
+    }
+  });
+
+  /* -------- 2단계: Search -> player.html 이동 -------- */
+
+  function goToPlayerPage() {
+    const name = input.value.trim();
+    if (!name) {
+      alert("선수 이름을 입력해 주세요.");
+      return;
+    }
+    const encoded = encodeURIComponent(name);
+    // 나중에 만들 player.html로 이동 (이름을 쿼리스트링으로 넘김)
+    window.location.href = `player.html?name=${encoded}`;
+  }
+
+  // 버튼 클릭
+  searchBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    goToPlayerPage();
+  });
+
+  // 검색창에서 Enter
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      goToPlayerPage();
+    }
+  });
+
+});
+</script>
+
+
+</body>
+</html>

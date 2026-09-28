@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Optiscore – Profile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont,
+        "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 1.5rem 3rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      color: #00AF5F;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+
+    .header-right {
+      font-size: 0.9rem;
+      color: #6b7280;
+    }
+
+    .profile-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    .profile-card {
+      width: 100%;
+      max-width: 520px;
+      border-radius: 24px;
+      padding: 2.4rem 2.6rem;
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.15);
+      border: 1px solid #e5e7eb;
+    }
+
+    .profile-title {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 1.6rem;
+    }
+
+    .info-row {
+      margin-bottom: 0.9rem;
+      font-size: 0.95rem;
+    }
+
+    .info-label {
+      display: inline-block;
+      width: 80px;
+      color: #6b7280;
+    }
+
+    .info-value {
+      font-weight: 600;
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin: 1.8rem 0 0.6rem;
+    }
+
+    /* ===== Saved players 영역 ===== */
+
+    .saved-wrapper {
+      margin-top: 0.4rem;
+    }
+
+    .saved-box {
+      margin-top: 0.25rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: 1rem;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      max-height: 140px;      /* 높이 조절 가능 */
+      overflow-y: auto;
+    }
+
+    .saved-box::-webkit-scrollbar {
+      width: 6px;
+    }
+    .saved-box::-webkit-scrollbar-thumb {
+      background: #d1d5db;
+      border-radius: 999px;
+    }
+
+    .saved-list {
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .saved-item {
+      padding: 0.25rem 0.7rem;
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      font-size: 0.85rem;
+      color: #111827;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    .saved-item:hover {
+      background: #00AF5F;
+      border-color: #00AF5F;
+      color: #ffffff;
+    }
+
+    .saved-empty {
+      margin-top: 0.15rem;
+      font-size: 0.85rem;
+      color: #9ca3af;
+    }
+
+    .actions {
+      margin-top: 1.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .btn-primary {
+      padding: 0.7rem 2.4rem;
+      background: #00AF5F;
+      border: none;
+      color: white;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .btn-primary:hover {
+      background: #0A8F4B;
+    }
+
+    .btn-secondary {
+      padding: 0.65rem 1.8rem;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #f3f4f6;
+    }
+
+    .error-box {
+      margin-top: 0.8rem;
+      font-size: 0.86rem;
+      color: #ef4444;
+      min-height: 1.1rem;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="header">
+    <div class="logo" onclick="location.href='index.html?skipIntro=1'">OPTISCORE</div>
+  </header>
+
+  <div class="profile-wrapper">
+    <main class="profile-card">
+      <h1 class="profile-title">My profile</h1>
+
+      <div class="info-row">
+        <span class="info-label">ID :</span>
+        <span class="info-value" id="profile-id">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Name :</span>
+        <span class="info-value" id="profile-name">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Email :</span>
+        <span class="info-value" id="profile-email">-</span>
+      </div>
+
+      <div class="section-title">Saved players</div>
+      <div class="saved-wrapper">
+        <div class="saved-box">
+          <ul id="saved-list" class="saved-list"></ul>
+          <div id="saved-empty" class="saved-empty">저장된 선수가 없습니다.</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn-secondary" id="back-main">Back to main</button>
+        <button class="btn-primary" id="logout-btn">Log out</button>
+      </div>
+
+      <div class="error-box" id="profile-error"></div>
+    </main>
+  </div>
+
+<script>
+  window.addEventListener("DOMContentLoaded", () => {
+    const idSpan      = document.getElementById("profile-id");
+    const nameSpan    = document.getElementById("profile-name");
+    const emailSpan   = document.getElementById("profile-email");
+    const errorBox    = document.getElementById("profile-error");
+    const backBtn     = document.getElementById("back-main");
+    const logoutBtn   = document.getElementById("logout-btn");
+    const savedList   = document.getElementById("saved-list");
+    const savedEmpty  = document.getElementById("saved-empty");
+
+    async function loadProfile() {
+  try {
+    const res = await fetch("/api/me", {   // ← 이제 같은 origin이니까 상대 경로로
+      method: "GET",
+      credentials: "include",
+    });
+
+    // 401이면 바로 로그인 페이지로 이동
+    if (res.status === 401) {
+      window.location.href = "login.html";
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      // 다른 에러는 그냥 에러 메시지만 표시
+      errorBox.textContent = data.message || "프로필 정보를 불러오지 못했습니다.";
+      return;
+    }
+
+    // ✅ 정상 로그인 상태
+    idSpan.textContent = data.user.id;
+    nameSpan.textContent = data.user.name;
+    emailSpan.textContent = data.user.email;
+
+    const saved = data.user.saved_players || [];
+    savedList.innerHTML = "";
+
+    if (!saved.length) {
+      savedEmpty.style.display = "block";
+    } else {
+      savedEmpty.style.display = "none";
+      saved.forEach((playerName) => {
+        const li = document.createElement("li");
+        li.textContent = playerName;
+        li.className = "saved-item";
+        li.addEventListener("click", () => {
+          const encoded = encodeURIComponent(playerName);
+          window.location.href = `player.html?name=${encoded}`;
+        });
+        savedList.appendChild(li);
+      });
+    }
+
+  } catch (err) {
+    console.error(err);
+    errorBox.textContent = "프로필 정보를 불러오지 못했습니다.";
+  }
+}
+
+
+
+
+    // 메인으로 돌아가기
+    backBtn.addEventListener("click", () => {
+      window.location.href = "index.html?skipIntro=1";
+    });
+
+    // 로그아웃
+    logoutBtn.addEventListener("click", async () => {
+      try {
+        await fetch("/api/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch (e) {
+        console.error(e);
+      }
+      window.location.href = "login.html";
+    });
+
+    loadProfile();
+  });
+</script>
+
+</body>
+</html>

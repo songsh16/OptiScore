@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Optiscore – Prediction</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont,
+        "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---------- HEADER ---------- */
+    .header {
+      padding: 1.5rem 3rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      color: #00AF5F;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+
+    .fav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #374151;
+      transition: 0.2s ease;
+    }
+
+    .fav-btn span.heart {
+      font-size: 1.05rem;
+      transition: transform 0.2s ease;
+    }
+
+    .fav-btn.active {
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #b91c1c;
+    }
+
+    .fav-btn.active span.heart {
+      transform: scale(1.15);
+    }
+
+    /* ---------- MAIN CARD ---------- */
+    .page-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    .prediction-card {
+      width: 100%;
+      max-width: 960px;
+      border-radius: 24px;
+      padding: 2.4rem 2.8rem;
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.15);
+      border: 1px solid #e5e7eb;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 2rem;
+      max-height: calc(100vh - 140px);
+      overflow: hidden;
+    }
+
+    .photo-box {
+      width: 100%;
+      aspect-ratio: 3/4;
+      border-radius: 24px;
+      background: #111827;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.2rem;
+      color: #f9fafb;
+      text-align: center;
+    }
+
+    /* 이니셜 동그라미 */
+    .photo-initial {
+      width: 72px;
+      height: 72px;
+      border-radius: 999px;
+      border: 2px solid #00AF5F;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    /* 이름 텍스트 */
+    .photo-name-text {
+      font-size: 0.9rem;
+      line-height: 1.3;
+      opacity: 0.9;
+    }
+
+    .form-scroll {
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    .title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin-bottom: 1.4rem;
+    }
+
+    .field-group-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-top: 1.4rem;
+      margin-bottom: 0.4rem;
+      color: #4b5563;
+    }
+
+    .field-group-hint {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      margin-bottom: 0.6rem;
+      margin-top: -0.3rem;
+    }
+
+    .field {
+      margin-bottom: 0.8rem;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 0.88rem;
+      margin-bottom: 0.25rem;
+      color: #4b5563;
+    }
+
+    .field-input,
+    select.field-input {
+      width: 100%;
+      padding: 0.7rem 0.9rem;
+      border-radius: 0.75rem;
+      border: 1px solid #d1d5db;
+      font-size: 0.9rem;
+      outline: none;
+      background: #ffffff;
+      font-family: inherit;
+    }
+
+    .field-input:focus {
+      border-color: #00AF5F;
+      box-shadow: 0 0 0 2px rgba(0, 175, 95, 0.15);
+    }
+
+    .field-inline {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .field-inline .field {
+      flex: 1 1 230px;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+      margin-top: 1.2rem;
+    }
+
+    .btn-secondary {
+      padding: 0.7rem 1.8rem;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #f3f4f6;
+    }
+
+    .btn-primary {
+      padding: 0.7rem 2.4rem;
+      background: #00AF5F;
+      border: none;
+      color: white;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .btn-primary:hover {
+      background: #0A8F4B;
+    }
+
+    .error-box {
+      margin-top: 0.8rem;
+      font-size: 0.86rem;
+      color: #ef4444;
+      min-height: 1.1rem;
+    }
+
+    /* ---------- FLOATING BACK BUTTON ---------- */
+    .back-floating {
+      position: fixed;
+      left: 1.5rem;
+      bottom: 1.5rem;
+      width: 50px;
+      height: 50px;
+      border-radius: 999px;
+      border: none;
+      background: #ffffff;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .back-floating svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    /* ---------- FOOTER ---------- */
+    .footer {
+      background: #000;
+      color: #e5e7eb;
+      padding: .8rem;
+      text-align: center;
+      font-size: .8rem;
+      margin-top: auto;
+    }
+
+    /* ---------- RESULT OVERLAY ---------- */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .overlay.hidden { display: none; }
+
+    .overlay-box {
+      background: rgba(0, 175, 95, 0.9);
+      color: #111111;
+      border-radius: 24px;
+      padding: 2rem 2.5rem;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.25);
+    }
+
+    .overlay-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+    }
+
+    .overlay-row {
+      font-size: 0.95rem;
+      margin-bottom: 0.4rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .overlay-row span.label { font-weight: 600; }
+    .overlay-row span.value { font-weight: 700; }
+
+    .overlay-actions {
+      margin-top: 1.4rem;
+      text-align: right;
+    }
+
+    .overlay-btn {
+      padding: 0.55rem 1.6rem;
+      border-radius: 999px;
+      border: none;
+      background: #ffffff;
+      color: #111827;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .overlay-btn:hover { background: #f9fafb; }
+
+    @media (max-width: 840px) {
+      .prediction-card {
+        grid-template-columns: 1fr;
+        max-height: none;
+      }
+      .photo-box {
+        max-width: 240px;
+        margin-bottom: 1rem;
+      }
+    }
+
+    /* ----- 이름 자동완성 드롭다운 ----- */
+    .name-wrapper { position: relative; }
+
+    .name-suggestions {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 100%;
+      margin-top: 0.35rem;
+      list-style: none;
+      background: #ffffff;
+      border-radius: 0.75rem;
+      border: 1px solid #e5e7eb;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+      z-index: 40;
+    }
+
+    .name-suggestions.hidden { display: none; }
+
+    .name-suggestion-item {
+      padding: 0.55rem 0.9rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    .name-suggestion-item:hover { background: #f3f4f6; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo" id="logo">OPTISCORE</div>
+
+    <button class="fav-btn" id="fav-btn">
+      <span class="heart">♡</span>
+      <span class="text">Save player</span>
+    </button>
+  </header>
+
+  <!-- MAIN -->
+  <div class="page-wrapper">
+    <main class="prediction-card">
+      <div class="photo-box" id="photo-box">
+         <div class="photo-initial" id="photo-initial">?</div>
+         <div class="photo-name-text" id="photo-name-text">No player selected</div>
+      </div>
+
+      <div class="form-scroll">
+        <h1 class="title" id="player-title">Prediction</h1>
+        <p class="subtitle">Fill in this season's stats (and, optionally, last season's) to estimate the market value.</p>
+
+        <!-- 기본 정보 -->
+        <div class="field-group-title">Basic information</div>
+
+        <div class="field name-wrapper">
+          <label class="field-label" for="field-name">Name :</label>
+          <input id="field-name" class="field-input" type="text" autocomplete="off" placeholder="검색해서 실제 선수 정보를 채우거나, 임의의 이름을 입력해서 what-if 시나리오를 테스트하세요" />
+          <ul id="name-suggestions" class="name-suggestions hidden"></ul>
+        </div>
+
+        <div class="field-inline">
+          <div class="field">
+            <label class="field-label" for="field-position">Position :</label>
+            <select id="field-position" class="field-input"></select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="field-age">Age (season end) :</label>
+            <input id="field-age" class="field-input" type="number" min="0" />
+          </div>
+        </div>
+
+        <div class="field-inline">
+          <div class="field">
+            <label class="field-label" for="field-prev-value">Last season's market value (€) :</label>
+            <input id="field-prev-value" class="field-input" type="number" min="0" placeholder="예측에 쓰이는 핵심 입력값" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="field-injury-days">Injury days (this season) :</label>
+            <input id="field-injury-days" class="field-input" type="number" min="0" value="0" />
+          </div>
+        </div>
+
+        <div class="field-inline">
+          <div class="field">
+            <label class="field-label" for="field-birth">Birth :</label>
+            <input id="field-birth" class="field-input" type="text" placeholder="e.g. 1987-06-24" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="field-present">Present market value (€) — comparison only :</label>
+            <input id="field-present" class="field-input" type="number" min="0" />
+          </div>
+        </div>
+
+        <!-- 이번 시즌 스탯 (원본 스탯 그대로 노출, 서버가 내부적으로 나머지 피처를 계산) -->
+        <div class="field-group-title">This season's stats</div>
+        <div id="current-stats-container"></div>
+
+        <!-- 변화량 계산용 지난 시즌 스탯 -->
+        <div class="field-group-title">Last season's stats (optional — used to compute year-over-year change)</div>
+        <p class="field-group-hint">비워두면 변화량이 0으로 계산됩니다.</p>
+        <div id="prev-stats-container"></div>
+
+        <div class="actions">
+          <button class="btn-secondary" id="reset-btn" type="button">Reset</button>
+          <button class="btn-primary" id="predict-btn" type="button">Predict</button>
+        </div>
+
+        <div class="error-box" id="error-box"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- FLOATING BACK BUTTON -->
+  <button class="back-floating" id="back-btn" aria-label="Back">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"></polyline>
+      <line x1="9" y1="12" x2="21" y2="12"></line>
+    </svg>
+  </button>
+
+  <!-- FOOTER -->
+  <footer class="footer">© 2025 Optiscore. All rights reserved.</footer>
+
+  <!-- RESULT OVERLAY -->
+  <div id="result-overlay" class="overlay hidden">
+    <div class="overlay-box">
+      <div class="overlay-title">Prediction result</div>
+
+      <div class="overlay-row">
+        <span class="label">Present market value</span>
+        <span class="value" id="ov-present">-</span>
+      </div>
+      <div class="overlay-row">
+        <span class="label">Predicted market value</span>
+        <span class="value" id="ov-predicted">-</span>
+      </div>
+      <div class="overlay-row">
+        <span class="label">Error (difference)</span>
+        <span class="value" id="ov-error">-</span>
+      </div>
+
+      <div class="overlay-actions">
+        <button class="overlay-btn" id="overlay-close">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const logo        = document.getElementById("logo");
+      const favBtn      = document.getElementById("fav-btn");
+      const heartSpan   = favBtn.querySelector(".heart");
+      const textSpan    = favBtn.querySelector(".text");
+      const playerTitle = document.getElementById("player-title");
+
+      const nameInput       = document.getElementById("field-name");
+      const birthInput      = document.getElementById("field-birth");
+      const positionSelect  = document.getElementById("field-position");
+      const ageInput        = document.getElementById("field-age");
+      const prevValueInput  = document.getElementById("field-prev-value");
+      const injuryDaysInput = document.getElementById("field-injury-days");
+      const presentInput    = document.getElementById("field-present");
+      const nameSuggestions = document.getElementById("name-suggestions");
+      const photoInitial    = document.getElementById("photo-initial");
+      const photoNameText   = document.getElementById("photo-name-text");
+
+      const currentStatsContainer = document.getElementById("current-stats-container");
+      const prevStatsContainer    = document.getElementById("prev-stats-container");
+
+      const errorBox    = document.getElementById("error-box");
+      const backBtn     = document.getElementById("back-btn");
+      const resetBtn    = document.getElementById("reset-btn");
+      const predictBtn  = document.getElementById("predict-btn");
+
+      const overlay      = document.getElementById("result-overlay");
+      const ovPresent    = document.getElementById("ov-present");
+      const ovPred       = document.getElementById("ov-predicted");
+      const ovError      = document.getElementById("ov-error");
+      const overlayClose = document.getElementById("overlay-close");
+
+      const params = new URLSearchParams(window.location.search);
+      const playerNameFromURL = params.get("name") || "";
+
+      let allPlayers = [];
+      let currentPlayerName = playerNameFromURL || "";
+      let isLoggedIn = false;
+      let isFavorite = false;
+      let changeTrackedStats = [];
+
+      // 로고 클릭 → 메인 화면
+      logo.addEventListener("click", () => {
+        window.location.href = "index.html?skipIntro=1";
+      });
+
+      // 뒤로가기 버튼
+      backBtn.addEventListener("click", () => window.history.back());
+
+      // Reset 버튼
+      resetBtn.addEventListener("click", () => {
+        document.querySelectorAll("[data-current-stat], [data-prev-stat]").forEach(inp => (inp.value = ""));
+        errorBox.textContent = "";
+      });
+
+      function updateFavUI() {
+        if (isFavorite) {
+          favBtn.classList.add("active");
+          heartSpan.textContent = "♥";
+          textSpan.textContent = "Saved";
+        } else {
+          favBtn.classList.remove("active");
+          heartSpan.textContent = "♡";
+          textSpan.textContent = "Save player";
+        }
+      }
+
+      async function loadMe() {
+        try {
+          const res = await fetch("/api/me", { method: "GET", credentials: "include" });
+          const data = await res.json();
+
+          if (!res.ok || !data.ok) {
+            isLoggedIn = false;
+            isFavorite = false;
+            updateFavUI();
+            return;
+          }
+
+          isLoggedIn = true;
+          const saved = data.user.saved_players || [];
+          isFavorite = currentPlayerName && saved.includes(currentPlayerName);
+          updateFavUI();
+        } catch (err) {
+          console.error(err);
+          isLoggedIn = false;
+          isFavorite = false;
+          updateFavUI();
+        }
+      }
+
+      // 포지션 select 옵션 중 문자열이 겹치는 것을 골라 자동 선택 (완벽하지 않아도 됨 — 수동 선택 가능)
+      function guessPositionOption(rawPosition) {
+        if (!rawPosition) return;
+        const options = Array.from(positionSelect.options).map(o => o.value);
+        const match = options.find(opt => rawPosition.includes(opt) || opt.includes(rawPosition));
+        if (match) positionSelect.value = match;
+      }
+
+      async function loadPlayerByName(playerName) {
+        if (!playerName) return;
+        try {
+          const res = await fetch("/api/player?name=" + encodeURIComponent(playerName));
+          const data = await res.json();
+
+          if (!res.ok || !data.ok) {
+            console.warn("player API error:", data);
+            return;
+          }
+
+          const p = data.player;
+          currentPlayerName = p.name || playerName;
+
+          nameInput.value    = p.name || nameInput.value;
+          birthInput.value   = p.birth || "";
+          presentInput.value = p.present_value || "";
+          guessPositionOption(p.position || "");
+
+          playerTitle.textContent = `Prediction – ${currentPlayerName}`;
+          updatePhotoCard(currentPlayerName);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      async function loadPlayers() {
+        try {
+          const res = await fetch("/api/players");
+          const data = await res.json();
+          if (!res.ok || !data.ok || !Array.isArray(data.players)) {
+            console.error("플레이어 목록 응답이 이상함:", data);
+            return;
+          }
+          allPlayers = data.players;
+        } catch (err) {
+          console.error("플레이어 목록 불러오기 실패:", err);
+        }
+      }
+
+      // Save player 버튼
+      favBtn.addEventListener("click", async () => {
+        if (!currentPlayerName) {
+          alert("먼저 선수 이름을 입력해 주세요.");
+          return;
+        }
+        if (!isLoggedIn) {
+          alert("선수를 저장하려면 먼저 로그인 해주세요.");
+          window.location.href = "login.html";
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/favorite", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ player_name: currentPlayerName, favorite: !isFavorite }),
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            alert(data.message || "저장 상태를 변경하지 못했습니다.");
+            return;
+          }
+
+          isFavorite = data.favorite;
+          updateFavUI();
+        } catch (err) {
+          console.error(err);
+          alert("서버와 통신하는 데 실패했습니다.");
+        }
+      });
+
+      // --------- 원본 스탯 입력 필드를 /api/features 응답으로 자동 생성 ---------
+      function createStatField(statName, datasetKey) {
+        const safeId = datasetKey + "-" + statName.replace(/[^a-zA-Z0-9가-힣]/g, "-");
+
+        const fieldWrap = document.createElement("div");
+        fieldWrap.className = "field";
+
+        const label = document.createElement("label");
+        label.className = "field-label";
+        label.setAttribute("for", safeId);
+        label.textContent = statName + " :";
+
+        const input = document.createElement("input");
+        input.className = "field-input";
+        input.id = safeId;
+        input.type = "number";
+        input.step = "0.01";
+        input.dataset[datasetKey] = statName;
+
+        fieldWrap.appendChild(label);
+        fieldWrap.appendChild(input);
+        return fieldWrap;
+      }
+
+      function renderStatFields(container, statNames, datasetKey) {
+        container.innerHTML = "";
+        let row = document.createElement("div");
+        row.className = "field-inline";
+        container.appendChild(row);
+
+        statNames.forEach((name, idx) => {
+          if (idx > 0 && idx % 2 === 0) {
+            row = document.createElement("div");
+            row.className = "field-inline";
+            container.appendChild(row);
+          }
+          row.appendChild(createStatField(name, datasetKey));
+        });
+      }
+
+      async function loadFeatures() {
+        try {
+          const res = await fetch("/api/features");
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            console.error("features 응답 이상:", data);
+            return;
+          }
+
+          positionSelect.innerHTML = (data.positions || [])
+            .map(pos => `<option value="${pos}">${pos}</option>`)
+            .join("");
+
+          changeTrackedStats = data.change_tracked_stats || [];
+          renderStatFields(currentStatsContainer, data.stat_fields || [], "currentStat");
+          renderStatFields(prevStatsContainer, changeTrackedStats, "prevStat");
+        } catch (err) {
+          console.error("feature 목록 불러오기 실패:", err);
+        }
+      }
+
+      async function initPredictionPage() {
+        await loadFeatures();
+        if (playerNameFromURL) {
+          await loadPlayerByName(playerNameFromURL);
+        }
+        await loadMe();
+        await loadPlayers();
+        updatePhotoCard(playerNameFromURL);
+      }
+
+      function collectStats(datasetKey) {
+        const out = {};
+        document.querySelectorAll(`[data-${datasetKey.replace(/([A-Z])/g, "-$1").toLowerCase()}]`).forEach(inp => {
+          const key = inp.dataset[datasetKey];
+          const val = inp.value.trim();
+          if (!key || !val) return;
+          const num = Number(val.replace(/,/g, ""));
+          if (!Number.isNaN(num)) out[key] = num;
+        });
+        return out;
+      }
+
+      // 예측 버튼
+      predictBtn.addEventListener("click", async () => {
+        errorBox.textContent = "";
+
+        const position = positionSelect.value;
+        if (!position) {
+          errorBox.textContent = "포지션을 선택해 주세요.";
+          return;
+        }
+
+        const payload = {
+          position,
+          age: Number(ageInput.value) || 0,
+          prev_market_value: Number((prevValueInput.value || "0").replace(/,/g, "")) || 0,
+          injury_days: Number(injuryDaysInput.value) || 0,
+          current_stats: collectStats("currentStat"),
+          prev_stats: collectStats("prevStat"),
+        };
+
+        if (Object.keys(payload.current_stats).length === 0) {
+          errorBox.textContent = "이번 시즌 스탯을 최소 한 개 이상 입력해 주세요.";
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(payload),
+          });
+
+          const data = await res.json();
+
+          if (!res.ok || !data.ok) {
+            errorBox.textContent = data.message || "예측에 실패했습니다.";
+            return;
+          }
+
+          const predicted = Number(data.predicted_value);
+          const presentRaw = presentInput.value.trim();
+          const present = presentRaw ? Number(presentRaw.replace(/,/g, "")) : null;
+
+          ovPred.textContent = isFinite(predicted)
+            ? predicted.toLocaleString("en-US", { maximumFractionDigits: 0 }) + " €"
+            : "-";
+
+          if (present !== null && isFinite(present)) {
+            ovPresent.textContent = present.toLocaleString("en-US", { maximumFractionDigits: 0 }) + " €";
+            const diff = predicted - present;
+            const sign = diff >= 0 ? "+" : "−";
+            const absDiff = Math.abs(diff);
+            ovError.textContent = sign + " " + absDiff.toLocaleString("en-US", { maximumFractionDigits: 0 }) + " €";
+          } else {
+            ovPresent.textContent = "-";
+            ovError.textContent = "-";
+          }
+
+          overlay.classList.remove("hidden");
+        } catch (err) {
+          console.error(err);
+          errorBox.textContent = "서버에 연결할 수 없습니다.";
+        }
+      });
+
+      overlayClose.addEventListener("click", () => overlay.classList.add("hidden"));
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) overlay.classList.add("hidden");
+      });
+
+      function clearNameSuggestions() {
+        nameSuggestions.innerHTML = "";
+        nameSuggestions.classList.add("hidden");
+      }
+
+      function showNameSuggestions(query) {
+        const q = query.trim().toLowerCase();
+        if (!q) { clearNameSuggestions(); return; }
+
+        const matched = allPlayers.filter((p) => p.toLowerCase().includes(q)).slice(0, 8);
+        if (!matched.length) { clearNameSuggestions(); return; }
+
+        nameSuggestions.innerHTML = matched
+          .map((p) => `<li class="name-suggestion-item">${p}</li>`)
+          .join("");
+        nameSuggestions.classList.remove("hidden");
+      }
+
+      function updatePhotoCard(name) {
+        const trimmed = (name || "").trim();
+        if (!trimmed) {
+          photoInitial.textContent = "?";
+          photoNameText.textContent = "No player selected";
+          return;
+        }
+        photoInitial.textContent = trimmed[0].toUpperCase();
+        photoNameText.textContent = trimmed;
+      }
+
+      nameInput.addEventListener("input", (e) => {
+        const value = e.target.value.trim();
+        currentPlayerName = value;
+        playerTitle.textContent = value ? `Prediction – ${value}` : "Prediction";
+        updatePhotoCard(value);
+        showNameSuggestions(value);
+      });
+
+      nameSuggestions.addEventListener("click", (e) => {
+        if (!e.target.classList.contains("name-suggestion-item")) return;
+        const selected = e.target.textContent;
+        nameInput.value = selected;
+        clearNameSuggestions();
+        currentPlayerName = selected;
+        playerTitle.textContent = `Prediction – ${selected}`;
+        loadPlayerByName(selected);
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".name-wrapper")) clearNameSuggestions();
+      });
+
+      initPredictionPage();
+    });
+  </script>
+</body>
+</html>

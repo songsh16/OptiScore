@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Optiscore – Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont,
+        "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 1.5rem 3rem 0;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      color: #00AF5F;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+
+    .auth-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding-bottom: 4rem;
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .auth-title {
+      font-size: 2.4rem;
+      font-weight: 800;
+      margin-bottom: 2rem;
+    }
+
+    label {
+      font-size: 0.95rem;
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+
+    .input {
+      width: 100%;
+      padding: 0.85rem 1.1rem;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      font-size: 0.95rem;
+      outline: none;
+      margin-bottom: 1.3rem;
+    }
+
+    .input:focus {
+      border-color: #00AF5F;
+      box-shadow: 0 0 0 2px rgba(0, 175, 95, 0.15);
+    }
+
+    .actions {
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .btn-go {
+      padding: 0.7rem 2.6rem;
+      background: #00AF5F;
+      border: none;
+      color: white;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .btn-go:hover {
+      background: #0A8F4B;
+    }
+
+    .join-link {
+      font-size: 0.9rem;
+      color: #6b7280;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .join-link:hover {
+      color: #000000;
+    }
+
+    .error-text {
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      color: #ef4444;
+      min-height: 1.2rem;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <div class="logo" onclick="location.href='index.html?skipIntro=1'">OPTISCORE</div>
+  </div>
+
+  <div class="auth-wrapper">
+    <main class="auth-card">
+      <h1 class="auth-title">log in</h1>
+
+      <p id="login-error" class="error-text"></p>
+
+      <form id="login-form">
+        <label for="login-id">ID :</label>
+        <input id="login-id" type="text" class="input" />
+
+        <label for="login-pw">Password :</label>
+        <input id="login-pw" type="password" class="input" />
+
+        <div class="actions">
+          <button class="btn-go" type="submit">Go</button>
+          <span class="join-link" onclick="location.href='join.html'">Join us</span>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <script>
+    document.getElementById("login-form").addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const id = document.getElementById("login-id").value.trim();
+      const pw = document.getElementById("login-pw").value.trim();
+      const errorBox = document.getElementById("login-error");
+
+      if (!id || !pw) {
+        errorBox.textContent = "ID와 비밀번호를 모두 입력해주세요.";
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",        // ★ 세션 유지 필수
+          body: JSON.stringify({
+            id: id,
+            password: pw,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          errorBox.textContent = data.message || "로그인에 실패했습니다.";
+          return;
+        }
+
+        errorBox.textContent = "";
+        window.location.href = "index.html?skipIntro=1";
+
+      } catch (err) {
+        console.error(err);
+        errorBox.textContent = "서버에 연결할 수 없습니다.";
+      }
+    });
+  </script>
+
+</body>
+</html>

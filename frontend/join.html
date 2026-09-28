@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Optiscore – Join</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont,
+        "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 로고 영역 */
+    .header {
+      padding: 1.5rem 3rem 0;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      color: #00AF5F;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+
+    /* 중앙 정렬 영역 */
+    .auth-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding-bottom: 4rem;
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .auth-title {
+      font-size: 2.4rem;
+      font-weight: 800;
+      margin-bottom: 2rem;
+    }
+
+    label {
+      font-size: 0.95rem;
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+
+    .input {
+      width: 100%;
+      padding: 0.85rem 1.1rem;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      font-size: 0.95rem;
+      outline: none;
+      margin-bottom: 1.3rem;
+    }
+
+    .input:focus {
+      border-color: #00AF5F;
+      box-shadow: 0 0 0 2px rgba(0, 175, 95, 0.15);
+    }
+
+    .actions {
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .btn-join {
+      padding: 0.7rem 2.6rem;
+      background: #00AF5F;
+      border: none;
+      color: white;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .btn-join:hover {
+      background: #0A8F4B;
+    }
+
+    .back-link {
+      font-size: 0.9rem;
+      color: #6b7280;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .back-link:hover {
+      color: #000000;
+    }
+
+    /* 에러 메시지 */
+    #join-error {
+      color: red;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      min-height: 18px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- 로고 -->
+  <div class="header">
+    <div class="logo" onclick="location.href='index.html?skipIntro=1'">OPTISCORE</div>
+  </div>
+
+  <!-- 중앙 배치 영역 -->
+  <div class="auth-wrapper">
+    <main class="auth-card">
+
+      <!-- 에러 메시지 -->
+      <div id="join-error"></div>
+
+      <h1 class="auth-title">Join</h1>
+
+      <!-- ★ form으로 감싸기 -->
+      <form id="join-form">
+
+        <label for="join-id">ID :</label>
+        <input id="join-id" type="text" class="input" />
+
+        <label for="join-name">Name :</label>
+        <input id="join-name" type="text" class="input" />
+
+        <label for="join-email">Email :</label>
+        <input id="join-email" type="email" class="input" />
+
+        <label for="join-pw">Password :</label>
+        <input id="join-pw" type="password" class="input" />
+
+        <div class="actions">
+          <button type="submit" class="btn-join">
+            Create Account
+          </button>
+          <span class="back-link" onclick="location.href='login.html'">
+            Back to login
+          </span>
+        </div>
+
+      </form>
+    </main>
+  </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  const joinForm  = document.getElementById("join-form");
+  const joinError = document.getElementById("join-error");
+
+  joinForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const name  = document.getElementById("join-name").value.trim();
+    const id    = document.getElementById("join-id").value.trim();
+    const email = document.getElementById("join-email").value.trim();
+    const pw    = document.getElementById("join-pw").value.trim();
+
+    if (!name || !id || !email || !pw) {
+      joinError.textContent = "모든 칸을 빠짐없이 입력해 주세요.";
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/join", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name, id, email, password: pw }),
+});
+
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        joinError.textContent = data.message || "회원가입 중 오류가 발생했습니다.";
+        return;
+      }
+
+      joinError.textContent = "";
+      alert("회원가입이 완료되었습니다! 이제 로그인 해 주세요.");
+      window.location.href = "login.html";
+
+    } catch (err) {
+      console.error(err);
+      joinError.textContent = "서버에 연결할 수 없습니다.";
+    }
+  });
+
+});
+</script>
+
+</body>
+</html>
+

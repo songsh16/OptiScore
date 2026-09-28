@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Optiscore – Players A–Z</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont,
+        "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* HEADER */
+    .header {
+      padding: 1.5rem 3rem 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      color: #00AF5F;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+
+    .menu-icon {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 3px;
+      cursor: pointer;
+    }
+    .menu-icon span {
+      width: 100%;
+      height: 100%;
+      border-radius: 3px;
+      background: #111827;
+    }
+
+    /* PAGE LAYOUT */
+    .page-wrapper {
+      flex: 1;
+      padding: 1.5rem 3rem 4rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .title-row {
+      margin-bottom: 1.8rem;
+    }
+
+    .page-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .page-subtitle {
+      font-size: 0.9rem;
+      color: #6b7280;
+    }
+
+    /* ALPHABET STRIP */
+    .alpha-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .alpha-box {
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      border: 2px solid #111111;   /* 기본: 검은 스트로크 */
+      background: #ffffff;         /* 흰 배경 */
+      color: #111111;              /* 검은 글씨 */
+      font-size: 0.9rem;
+      cursor: pointer;
+      user-select: none;
+      transition: 0.18s ease;
+    }
+
+    .alpha-box:hover {
+      transform: translateY(-1px);
+    }
+
+    /* 선택된 알파벳 상태 */
+    .alpha-box.active {
+      background: #111111;          /* 검은 배경 */
+      border-color: #00AF5F;        /* 초록 스트로크 */
+      color: #00AF5F;               /* 초록 글씨 */
+    }
+
+    /* PLAYER LIST */
+    .player-panel {
+      flex: 1;
+      border-radius: 18px;
+      border: 1px solid #e5e7eb;
+      padding: 1.2rem 1.4rem;
+      background: #f9fafb;
+      overflow-y: auto;
+    }
+
+    .player-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.9rem;
+    }
+
+    .player-header-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .player-count {
+      font-size: 0.8rem;
+      color: #6b7280;
+    }
+
+    .player-list {
+      list-style: none;
+    }
+
+    .player-item {
+      padding: 0.55rem 0.45rem;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.92rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: 0.16s ease;
+    }
+
+    .player-item + .player-item {
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .player-item:hover {
+      background: #ffffff;
+      padding-left: 0.75rem;
+    }
+
+    .player-arrow {
+      font-size: 0.8rem;
+      color: #9ca3af;
+    }
+
+    .player-empty {
+      font-size: 0.9rem;
+      color: #9ca3af;
+      padding: 0.4rem 0;
+    }
+
+    /* BACK BUTTON */
+    .back-floating {
+      position: fixed;
+      left: 1.5rem;
+      bottom: 1.5rem;
+      width: 50px;
+      height: 50px;
+      border-radius: 999px;
+      border: none;
+      background: #ffffff;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .back-floating svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    /* FOOTER */
+    .footer {
+      background: #000;
+      color: #e5e7eb;
+      padding: .8rem;
+      text-align: center;
+      font-size: .8rem;
+      margin-top: auto;
+    }
+
+    @media (max-width: 768px) {
+      .header {
+        padding: 1.2rem 1.5rem 0.6rem;
+      }
+      .page-wrapper {
+        padding: 1rem 1.5rem 4rem;
+      }
+      .alpha-strip {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo" id="logo">OPTISCORE</div>
+    <!-- 그냥 메인으로 돌아가도록 링크 -->
+    <div class="menu-icon" id="menu-btn">
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <div class="page-wrapper">
+    <div class="title-row">
+      <h1 class="page-title">Players A–Z</h1>
+      <p class="page-subtitle">
+        Click a letter to see players whose names start with it.
+      </p>
+    </div>
+
+    <!-- 알파벳 박스 줄 -->
+    <div id="alpha-strip" class="alpha-strip"></div>
+
+    <!-- 선수 리스트 패널 -->
+    <section class="player-panel">
+      <div class="player-header">
+        <div class="player-header-title" id="current-letter">Select a letter above</div>
+        <div class="player-count" id="player-count"></div>
+      </div>
+      <ul id="player-list" class="player-list"></ul>
+      <div id="player-empty" class="player-empty"></div>
+    </section>
+  </div>
+
+  <!-- BACK FLOATING BUTTON -->
+  <button class="back-floating" id="back-btn" aria-label="Back">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"></polyline>
+      <line x1="9" y1="12" x2="21" y2="12"></line>
+    </svg>
+  </button>
+
+  <!-- FOOTER -->
+  <footer class="footer">© 2025 Optiscore. All rights reserved.</footer>
+
+<script>
+  window.addEventListener("DOMContentLoaded", () => {
+    const logo         = document.getElementById("logo");
+    const menuBtn      = document.getElementById("menu-btn");
+    const backBtn      = document.getElementById("back-btn");
+
+    const alphaStrip   = document.getElementById("alpha-strip");
+    const playerList   = document.getElementById("player-list");
+    const playerEmpty  = document.getElementById("player-empty");
+    const playerCount  = document.getElementById("player-count");
+    const currentLetter= document.getElementById("current-letter");
+
+    const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    let playersByLetter = {};
+    let current = null;
+
+    // 로고 → 메인
+    logo.addEventListener("click", () => {
+      window.location.href = "index.html?skipIntro=1";
+    });
+
+    // 오른쪽 그리드 아이콘도 메인으로
+    menuBtn.addEventListener("click", () => {
+      window.location.href = "index.html?skipIntro=1";
+    });
+
+    // 플로팅 뒤로가기
+    backBtn.addEventListener("click", () => {
+      window.history.back();
+    });
+
+    // 알파벳 버튼 만들기
+    LETTERS.forEach((ch) => {
+      const btn = document.createElement("div");
+      btn.className = "alpha-box";
+      btn.textContent = ch;
+      btn.dataset.letter = ch;
+      btn.addEventListener("click", () => selectLetter(ch));
+      alphaStrip.appendChild(btn);
+    });
+
+    function setActiveLetterButton(letter) {
+      document.querySelectorAll(".alpha-box").forEach((el) => {
+        el.classList.toggle("active", el.dataset.letter === letter);
+      });
+    }
+
+    function renderList(letter) {
+      const list = playersByLetter[letter] || [];
+      playerList.innerHTML = "";
+
+      if (!list.length) {
+        playerEmpty.textContent = `No players starting with '${letter}'.`;
+        playerCount.textContent = "";
+        return;
+      }
+
+      playerEmpty.textContent = "";
+      playerCount.textContent = `${list.length} player(s)`;
+
+      list.forEach((name) => {
+        const li = document.createElement("li");
+        li.className = "player-item";
+
+        const spanName = document.createElement("span");
+        spanName.textContent = name;
+
+        const spanArrow = document.createElement("span");
+        spanArrow.textContent = "›";
+        spanArrow.className = "player-arrow";
+
+        li.appendChild(spanName);
+        li.appendChild(spanArrow);
+
+        li.addEventListener("click", () => {
+          const encoded = encodeURIComponent(name);
+          window.location.href = `player.html?name=${encoded}`;
+        });
+
+        playerList.appendChild(li);
+      });
+    }
+
+    function selectLetter(letter) {
+      current = letter;
+      setActiveLetterButton(letter);
+      currentLetter.textContent = `Players – '${letter}'`;
+      renderList(letter);
+    }
+
+    async function loadPlayers() {
+      try {
+        const res  = await fetch("/api/players");
+        const data = await res.json();
+
+        if (!res.ok || !data.ok || !Array.isArray(data.players)) {
+          console.error("플레이어 목록 응답 오류:", data);
+          playerEmpty.textContent = "Could not load player list.";
+          return;
+        }
+
+        const allPlayers = data.players;
+
+        // A–Z 그룹 초기화
+        LETTERS.forEach((ch) => { playersByLetter[ch] = []; });
+
+        allPlayers.forEach((name) => {
+          const trimmed = (name || "").trim();
+          if (!trimmed) return;
+
+          const first = trimmed[0].toUpperCase();
+          if (LETTERS.includes(first)) {
+            playersByLetter[first].push(trimmed);
+          }
+        });
+
+        // 각 그룹 안에서 알파벳 정렬
+        LETTERS.forEach((ch) => {
+          playersByLetter[ch].sort((a, b) => a.localeCompare(b));
+        });
+
+        // 최초로 플레이어가 존재하는 알파벳 선택 (없으면 그냥 A)
+        const firstNonEmpty = LETTERS.find((ch) => playersByLetter[ch].length > 0) || "A";
+        selectLetter(firstNonEmpty);
+
+      } catch (err) {
+        console.error(err);
+        playerEmpty.textContent = "Server error while loading players.";
+      }
+    }
+
+    loadPlayers();
+  });
+</script>
+
+</body>
+</html>
