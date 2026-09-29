@@ -22,6 +22,17 @@
      LEGACY_XGB_PARAMS로 대체).
   7. 포지션별로 XGBoost/LightGBM 중 GroupKFold CV R²가 더 높은 쪽을 채택한다.
 
+평가 방법론 3라운드:
+  8. 측면 미드필더처럼 표본이 작은 포지션은 단일 `GroupShuffleSplit` 하나로 평가하면
+     random_state만 바꿔도 R²가 4%~56%까지 흔들린다는 걸 실제로 확인했다. 그래서
+     "공식" 성능 지표(`results[position]["cv_split"]`)는 GroupKFold 4-fold 평균으로
+     바꿨다. 단일 분할(`grouped_split`)은 저장할 모델 하나를 고르고 피처 중요도/오차
+     분석 예시를 뽑는 용도로만 쓴다. 자세한 내용은 model_evaluation.md -1절.
+  9. `backend/features.py`의 `_denoise_side_midfielder()`로 측면 미드필더 포지션
+     라벨이 다른 시즌과 어긋나는 선수(9명, 13개 시즌)를 정리했지만, 교차검증 R²는
+     거의 변하지 않았다(45.8%→44.3%) — 근본 원인은 라벨 노이즈가 아니라 표본
+     부족이었다 (model_evaluation.md 5절).
+
 실행:
     python ml/tune.py --trials 40    # (선택) 하이퍼파라미터 재탐색, 수십 분 소요
     python ml/train.py               # 최종 모델 학습 + 저장
@@ -40,7 +51,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import GroupShuffleSplit, train_test_split
+from sklearn.model_selection import GroupKFold, GroupShuffleSplit, train_test_split
+
+N_CV_FOLDS = 4
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -131,8 +144,49 @@ def _eval_naive_split(X: pd.DataFrame, y: pd.Series, model_type: str, params: di
     }
 
 
+def _cv_metrics(X: pd.DataFrame, y: pd.Series, groups: pd.Series, model_type: str, params: dict) -> dict:
+    """
+    선수 단위 GroupKFold 교차검증 R²/RMSE (fold마다 평균). 표본이 작은
+    포지션(예: 측면 미드필더, 343건)은 단일 GroupShuffleSplit 하나로 평가하면
+    어떤 선수가 test에 뽑히느냐에 따라 R²가 4%~56%까지 왔다갔다 할 만큼
+    불안정하다는 걸 실제로 확인했다. 그래서 "공식" 성능 지표는 이 교차검증
+    평균을 쓰고, 단일 분할(_eval_grouped_split)은 저장할 모델 하나를 고르고
+    피처 중요도/오차 분석 예시를 뽑는 용도로만 쓴다.
+    """
+    gkf = GroupKFold(n_splits=N_CV_FOLDS)
+    r2_scores, rmses = [], []
+
+    for train_idx, test_idx in gkf.split(X, y, groups):
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+        groups_train = groups.iloc[train_idx]
+
+        inner = GroupShuffleSplit(test_size=0.15, n_splits=1, random_state=0)
+        fit_idx, val_idx = next(inner.split(X_train, y_train, groups_train))
+        X_fit, X_val = X_train.iloc[fit_idx], X_train.iloc[val_idx]
+        y_fit, y_val = y_train.iloc[fit_idx], y_train.iloc[val_idx]
+
+        model, fit_kwargs = MODEL_FACTORIES[model_type](params, X_val, y_val)
+        model.fit(X_fit, y_fit, **fit_kwargs)
+
+        log_pred = model.predict(X_test)
+        r2_scores.append(r2_score(y_test, log_pred))
+        rmses.append(float(np.sqrt(mean_squared_error(np.expm1(y_test), np.expm1(log_pred)))))
+
+    return {
+        "r2_mean": float(np.mean(r2_scores)),
+        "r2_std": float(np.std(r2_scores)),
+        "rmse_mean": float(np.mean(rmses)),
+        "n_folds": N_CV_FOLDS,
+    }
+
+
 def _eval_grouped_split(X: pd.DataFrame, y: pd.Series, groups: pd.Series, model_type: str, params: dict):
-    """선수 단위 그룹 분할 (수정된 방식) + 조기 종료로 과적합 억제."""
+    """
+    선수 단위 단일 분할로 실제 저장할 모델 하나를 학습하고, 피처 중요도/오차
+    분석 예시를 뽑는다. 이 함수가 반환하는 r2/rmse는 "예시 하나"일 뿐 공식
+    성능 지표가 아니다 — 공식 지표는 `_cv_metrics`(GroupKFold 평균)를 쓴다.
+    """
     splitter = GroupShuffleSplit(test_size=0.2, n_splits=1, random_state=42)
     train_idx, test_idx = next(splitter.split(X, y, groups))
     X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
@@ -193,6 +247,7 @@ def train_all(df: pd.DataFrame) -> dict:
         groups = group_df["name_key"]
 
         naive_metrics = _eval_naive_split(X, y, model_type, params)
+        cv_metrics = _cv_metrics(X, y, groups, model_type, params)
         model, grouped_metrics, imp_df, err_df = _eval_grouped_split(X, y, groups, model_type, params)
 
         bundle[position] = {"model": model, "feature_cols": list(X.columns), "model_type": model_type}
@@ -202,6 +257,7 @@ def train_all(df: pd.DataFrame) -> dict:
             "model_type": model_type,
             "tuning_cv_r2": config["cv_r2"],
             "naive_split": naive_metrics,
+            "cv_split": cv_metrics,
             "grouped_split": grouped_metrics,
             "top_features": imp_df.to_dict("records"),
             "overrated_top5": err_df.sort_values("오차", ascending=False)
@@ -212,8 +268,9 @@ def train_all(df: pd.DataFrame) -> dict:
                 .head(5).to_dict("records"),
         }
         print(
-            f"{position} [{model_type}]: 랜덤분할 R²={naive_metrics['r2']:.2%} -> 그룹분할 R²={grouped_metrics['r2']:.2%} "
-            f"(n={len(group_df)}, best_iter={grouped_metrics['best_iteration']})"
+            f"{position} [{model_type}]: 랜덤분할 R²={naive_metrics['r2']:.2%} -> "
+            f"CV R²={cv_metrics['r2_mean']:.2%}(±{cv_metrics['r2_std']:.2%}) "
+            f"(단일분할 예시={grouped_metrics['r2']:.2%}, n={len(group_df)}, best_iter={grouped_metrics['best_iteration']})"
         )
 
     return bundle, results

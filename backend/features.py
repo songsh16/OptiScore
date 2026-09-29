@@ -129,6 +129,34 @@ def group_position_detailed(position) -> str:
     return "기타"
 
 
+def _denoise_side_midfielder(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    측면 미드필더 표본이 너무 작은 문제(다른 포지션 대비 R²가 크게 낮음)를
+    완화하기 위한 시즌 라벨 정리. 어떤 선수의 측면 미드필더 시즌 수가 그 외
+    시즌 수보다 적거나 같고, 그 외 시즌들이 전부 같은 한 그룹으로 일치하면
+    (예: 6시즌 중 4시즌 윙어, 2시즌만 측면 미드필더) 소수/동률 쪽을 그
+    그룹으로 재분류한다. 동률일 때도 측면 미드필더가 아닌 쪽으로 정리한다.
+
+    그 외 시즌이 여러 그룹으로 나뉘어 있으면(예: 실제로 커리어 중반에 포지션이
+    완전히 바뀐 선수) 어느 쪽이 "진짜"인지 판단할 근거가 없으므로 건드리지
+    않는다.
+    """
+    df = df.copy()
+    for _, idx in df.groupby("name_key").groups.items():
+        sub = df.loc[idx]
+        is_smf = sub["포지션_그룹"] == "측면 미드필더"
+        smf_count = int(is_smf.sum())
+        if smf_count == 0 or smf_count == len(sub):
+            continue  # 측면 미드필더가 없거나, 전부 측면 미드필더면 그대로 둔다
+
+        others = sub.loc[~is_smf, "포지션_그룹"]
+        other_unique = others.unique()
+        if len(other_unique) == 1 and smf_count <= len(others):
+            df.loc[sub.index[is_smf], "포지션_그룹"] = other_unique[0]
+
+    return df
+
+
 def load_and_clean(raw_df: pd.DataFrame) -> pd.DataFrame:
     """원본 엑셀 -> 컬럼명 정리, 숫자 클리닝, 5대 리그/필드 플레이어로 필터링."""
     df = raw_df.drop(columns=["Successful Dribbles.1"], errors="ignore")
@@ -147,6 +175,7 @@ def load_and_clean(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     df["포지션_그룹"] = df["포지션"].apply(group_position_detailed)
     df = df[df["포지션_그룹"] != "기타"].copy()
+    df = _denoise_side_midfielder(df)
     return df
 
 
