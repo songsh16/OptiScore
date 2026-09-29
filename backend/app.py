@@ -28,26 +28,30 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=30)
 CORS(app, supports_credentials=True)
 
 # ------------------------------------------------------------------
-# 0. 전역 모델 변수 — 포지션 그룹별로 하나씩 갖고 있는다.
-#    (기존 버전은 학습 루프의 마지막 포지션 모델 하나만 저장/로딩해서
-#     모든 포지션의 예측을 그 모델 하나로 처리하는 버그가 있었다.)
+# 0. 전역 모델 변수 — 포지션을 원-핫 피처로 받는 단일 통합 모델 하나.
+#    (포지션별로 8개 모델을 따로 학습했었지만, 통합 모델 하나가 8개 포지션
+#     전부에서 더 좋은 성능을 보여 교체했다 — 특히 표본이 적은 포지션이
+#     전체 데이터에서 학습된 패턴의 혜택을 받는다. ml/reports/model_evaluation.md
+#     참고. 예전 포지션별 모델을 쓰려면 `python ml/train.py --specialized`로
+#     번들을 다시 만들면 되고, 이 경우 MODEL_BUNDLE은 {포지션: {...}} 형태다 —
+#     아래 predict 로직은 단일 모델 번들 형태를 기준으로 한다.)
 # ------------------------------------------------------------------
-MODELS_BY_POSITION: dict[str, dict] = {}
+MODEL_BUNDLE: dict | None = None
 
 
 def load_models():
-    global MODELS_BY_POSITION
+    global MODEL_BUNDLE
     if not os.path.exists(MODEL_BUNDLE_PATH):
         print(f"모델 번들을 찾지 못했습니다: {MODEL_BUNDLE_PATH}")
-        MODELS_BY_POSITION = {}
+        MODEL_BUNDLE = None
         return
 
     try:
-        MODELS_BY_POSITION = joblib.load(MODEL_BUNDLE_PATH)
-        print(f"모델 로딩 성공: {len(MODELS_BY_POSITION)}개 포지션 ({', '.join(MODELS_BY_POSITION)})")
+        MODEL_BUNDLE = joblib.load(MODEL_BUNDLE_PATH)
+        print(f"모델 로딩 성공: {MODEL_BUNDLE['model_type']}, 피처 {len(MODEL_BUNDLE['feature_cols'])}개")
     except Exception as e:
         print("모델 로딩 실패:", e)
-        MODELS_BY_POSITION = {}
+        MODEL_BUNDLE = None
 
 
 # ------------------------------------------------------------------
@@ -366,14 +370,14 @@ def api_features():
 
 @app.post("/api/predict")
 def api_predict():
-    if not MODELS_BY_POSITION:
+    if not MODEL_BUNDLE:
         return jsonify(ok=False, message="모델이 로딩되어 있지 않습니다."), 500
 
     data = request.get_json() or {}
     position = (data.get("position") or "").strip()
     group = features.group_position_detailed(position)
 
-    if group not in MODELS_BY_POSITION:
+    if group not in features.POSITION_GROUPS:
         return jsonify(ok=False, message=f"'{position}' 포지션에 대한 예측 모델이 없습니다."), 400
 
     def to_float(value, default=0.0):
@@ -389,7 +393,6 @@ def api_predict():
     current_stats = {k: to_float(v) for k, v in (data.get("current_stats") or {}).items()}
     prev_stats = {k: to_float(v) for k, v in (data.get("prev_stats") or {}).items()}
 
-    model_info = MODELS_BY_POSITION[group]
     X = features.engineer_single(
         position=position,
         age=age,
@@ -397,12 +400,12 @@ def api_predict():
         injury_days=injury_days,
         current_stats=current_stats,
         prev_stats=prev_stats,
-        feature_cols=model_info["feature_cols"],
+        feature_cols=MODEL_BUNDLE["feature_cols"],
         league=league,
     )
 
     try:
-        log_pred = float(model_info["model"].predict(X)[0])
+        log_pred = float(MODEL_BUNDLE["model"].predict(X)[0])
     except Exception as e:
         print("예측 중 에러:", e)
         return jsonify(ok=False, message="모델 예측 중 오류가 발생했습니다."), 500

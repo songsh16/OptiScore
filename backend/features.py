@@ -214,6 +214,14 @@ def engineer_batch(df: pd.DataFrame) -> pd.DataFrame:
     for league in TOP_5_LEAGUES:
         df[f"리그_{league}"] = (df["리그"] == league).astype(float)
 
+    # 포지션 원-핫: 포지션별로 모델을 8개 따로 학습하는 대신, 포지션을 피처로
+    # 넣은 단일 통합 모델 하나가 훨씬 낫다는 게 실험으로 확인됐다 (특히 표본이
+    # 적은 측면 미드필더가 전체 11,637행에서 학습된 나이 곡선/리그 효과 등의
+    # 혜택을 받아 GroupKFold CV R²가 44.3% -> 65.1%로 뛰었다). 자세한 비교는
+    # ml/reports/model_evaluation.md 참고.
+    for pos in POSITION_GROUPS:
+        df[f"포지션_{pos}"] = (df["포지션_그룹"] == pos).astype(float)
+
     return df
 
 
@@ -285,5 +293,9 @@ def engineer_single(
         league_col = f"리그_{league}"
         if league_col in row.columns:
             row[league_col] = 1.0
+
+    position_col = f"포지션_{group_position_detailed(position)}"
+    if position_col in row.columns:
+        row[position_col] = 1.0
 
     return row

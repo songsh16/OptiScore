@@ -25,3 +25,9 @@ tqdm>=4.66
 jupyter
 matplotlib
 seaborn
+
+# ml/experiment_autogluon.py는 여기 포함하지 않는다 — AutoGluon이 이 프로젝트보다
+# 낮은 numpy/pandas 버전을 요구해서, 전역 환경 대신 별도 venv에 설치해야 한다:
+#   python -m venv ml/.autogluon_venv
+#   ml/.autogluon_venv/Scripts/pip install "autogluon.tabular[all]"
+#   ml/.autogluon_venv/Scripts/python ml/experiment_autogluon.py

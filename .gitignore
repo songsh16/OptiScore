@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+ml/.autogluon_venv/
+AutogluonModels/
 
 # 로컬 DB (init_db()가 자동 생성함 — 실제 유저 데이터를 저장소에 올리지 않음)
 backend/users.db

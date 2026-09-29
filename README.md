@@ -1,15 +1,18 @@
 # OptiScore
 
 5대 리그(분데스리가·라리가·프리미어리그·세리에A·리그1) 축구 선수의 시즌 스탯으로
-Transfermarkt 시장 가치를 예측하는 풀스택 웹앱. 포지션 그룹(8개)마다 별도의
-XGBoost/LightGBM 모델을 학습해서, 검색한 선수의 예상 시장 가치를 보여주고 임의의
-스탯을 입력해 "이런 활약을 하면 몸값이 얼마나 될까"를 시뮬레이션해볼 수 있다.
+Transfermarkt 시장 가치를 예측하는 풀스택 웹앱. "포지션"을 피처로 받는 단일 통합
+XGBoost 모델 하나로, 검색한 선수의 예상 시장 가치를 보여주고 임의의 스탯을 입력해
+"이런 활약을 하면 몸값이 얼마나 될까"를 시뮬레이션해볼 수 있다.
 
 **모델 성능**: 데이터 누수를 잡고 선수 단위 `GroupKFold` 교차검증으로 정직하게
-측정한 R²는 8개 포지션 평균 **71.8%** (79.2%~44.3% 범위 — 측면 미드필더는 표본이
-343건뿐이라 다른 포지션보다 낮음). 단일 train/test 분할 하나만 보고 성능을
-보고하면 작은 포지션에서 최대 ±25%p까지 착시가 생길 수 있다는 것도 실제로
-확인했다 (자세한 내용은 [`ml/reports/model_evaluation.md`](ml/reports/model_evaluation.md) -1절).
+측정한 R²는 8개 포지션 평균 **77.3%** (80.9%~65.1% 범위 — 측면 미드필더는 표본이
+343건뿐이라 다른 포지션보다 낮음). 원래는 포지션마다 모델 8개를 따로 학습했는데,
+"포지션"을 피처로 넣은 단일 통합 모델 하나로 바꾸니 8개 포지션 전부 개선됐다
+(평균 71.8%→77.3%, 표본이 가장 적은 측면 미드필더는 44.3%→65.1%). 단일 train/test
+분할 하나만 보고 성능을 보고하면 작은 포지션에서 최대 ±25%p까지 착시가 생길 수
+있다는 것도 실제로 확인했다 (자세한 내용은
+[`ml/reports/model_evaluation.md`](ml/reports/model_evaluation.md)).
 
 ## 데모 흐름
 1. 선수 이름 검색 → 기본 정보(포지션/나이/현재 시장가치/모델 예측값) 확인
@@ -22,20 +25,24 @@ XGBoost/LightGBM 모델을 학습해서, 검색한 선수의 예상 시장 가�
 frontend/  (바닐라 HTML/CSS/JS)  ──HTTP──▶  backend/app.py (Flask)
                                               │
                                               ├─ backend/features.py   (피처 엔지니어링, 학습·서빙 공용)
-                                              ├─ backend/models/model_bundle.pkl  (포지션별 XGBoost/LightGBM 8개)
+                                              ├─ backend/models/model_bundle.pkl  (통합 XGBoost 모델 1개)
                                               └─ data/player_with_pred.xlsx (선수 조회용)
 
-ml/tune.py   → 선수 단위 GroupKFold 기준 Optuna 하이퍼파라미터 재탐색 (선택적, 결과: ml/reports/best_params.json)
+ml/tune_pooled.py → 통합 모델 하이퍼파라미터 재탐색 (선택적, 결과: ml/reports/best_params_pooled.json)
 ml/train.py + ml/notebooks/model_training.ipynb  → 모델 학습, backend/models/model_bundle.pkl 생성
 ml/data_pipeline/                                 → 원본 데이터 수집 스크립트 (FotMob/Transfermarkt)
+
+# 비교/참고용 (기본 실행 경로 아님)
+ml/tune.py, ml/train.py --specialized → 포지션별 전용 모델 8개 (이전 방식)
+ml/experiment_pooled.py, ml/experiment_autogluon.py → 통합 모델 채택 근거가 된 비교 실험
 ```
 
 ## 실행 방법
 ```bash
 pip install -r requirements.txt
 
-# (선택, 수십 분 소요) 하이퍼파라미터 재탐색 — 결과가 이미 ml/reports/best_params.json에 있음
-python ml/tune.py --trials 40
+# (선택, 수십 분 소요) 하이퍼파라미터 재탐색 — 결과가 이미 ml/reports/best_params_pooled.json에 있음
+python ml/tune_pooled.py --trials 40
 
 # 모델을 이미 backend/models/model_bundle.pkl로 갖고 있다면 이 단계는 생략 가능
 python ml/train.py
@@ -52,8 +59,9 @@ python app.py
 1. **포지션별 모델이 실제로 안 쓰이던 버그**: 8개 포지션 모델을 각각 학습했지만
    `joblib.dump`로 저장되는 건 학습 루프의 마지막 포지션(측면 수비수) 모델
    하나뿐이었다 — 서비스는 스트라이커든 미드필더든 전부 그 모델 하나로 예측하고
-   있었다. 지금은 `{포지션: 모델}` 딕셔너리 전체를 저장하고, `/api/predict`가
-   입력된 포지션에 맞는 모델을 선택한다.
+   있었다. 이후 `{포지션: 모델}` 딕셔너리 전체를 저장하도록 고쳤다가, 나중에
+   포지션을 피처로 넣은 통합 모델 하나로 아키텍처 자체를 바꿨다 (아래 "성능 개선
+   3라운드" 참고) — 결과적으로 지금은 의도적으로 모델이 하나다.
 2. **스케일러 누락 버그**: 학습은 `StandardScaler`로 표준화한 데이터로 했지만
    저장된 번들엔 스케일러가 빠져 있어, 서빙 시 원본 스케일 입력이 학습 때와 다른
    기준으로 트리 분기와 비교되는 문제가 있었다. XGBoost는 트리 분기가 피처별
@@ -109,10 +117,22 @@ python app.py
    `train_test_split` 하나로 평가하면 R²가 **4%~56%**까지 요동친다는 것도 발견해서,
    공식 성능 지표를 선수 단위 `GroupKFold` 4-fold 평균으로 바꿨다.
 
+## 성능 개선 3라운드 — 포지션별 8개 모델 → 통합 모델 1개
+2라운드까지 다듬은 뒤에도 측면 미드필더(표본 343건)만 유독 낮았다. "다른 포지션
+선수가 라벨만 잘못 붙어서 여기 섞인 거 아니냐"는 가설부터 검증했는데, 실제
+해당하는 선수는 162명 중 9명뿐이었고 라벨을 정리해도(13개 시즌 재분류) 성능은
+그대로였다(45.8%→44.3%) — 근본 원인은 표본 부족이었다. 대신 **포지션마다 모델을
+따로 학습하지 말고, 포지션을 피처로 넣은 모델 하나로 합치면** 표본이 적은 포지션도
+전체 데이터의 공통 패턴(나이 곡선, 리그 효과)을 공유받을 수 있다는 가설을
+검증했더니 8개 포지션 **전부** 개선됐다 (평균 71.8%→77.3%, 측면 미드필더
+44.3%→65.1%). AutoGluon(CatBoost·신경망 포함 자동 앙상블)과도 비교했는데 근소하게
+더 좋았지만(+0.8%p) 배포 복잡도 대비 이득이 작아 채택하지 않았다. 자세한 내용은
+[`ml/reports/model_evaluation.md`](ml/reports/model_evaluation.md) 0절.
+
 ## 알려진 한계
-- **측면 미드필더**는 표본이 343건(154명)으로 근본적으로 부족해서 R²가 44%
-  수준으로 다른 포지션(71~79%)보다 뚜렷이 낮다. 포지션 라벨을 정리해봐도 표본
-  크기 자체가 줄어들 뿐 성능은 그대로였다 — 더 많은 데이터 없이는 해결이 어렵다.
+- **측면 미드필더**는 표본이 343건(154명)으로 근본적으로 부족해서 통합 모델
+  전환 후에도(65.1%) 다른 포지션(74~81%)보다 뚜렷이 낮다. 더 많은 데이터 없이는
+  추가 개선이 어려워 보인다.
 - 시즌 스탯만으로는 브랜드 가치·이적시장 하이프를 설명하지 못해, 슈퍼스타
   (메시, 음바페, 손흥민, 케인 등)는 피처/모델을 개선해도 일관되게 과소평가된다.
 - 지금의 "선수 단위 그룹 분할"도 실제 배포 시나리오(과거 시즌으로 학습해 미래
@@ -126,10 +146,11 @@ python app.py
   이번 작업 범위에서는 보류).
 
 ## 기술 스택
-- **Backend**: Flask, SQLite(회원/즐겨찾기), XGBoost, LightGBM, scikit-learn, pandas
+- **Backend**: Flask, SQLite(회원/즐겨찾기), XGBoost, scikit-learn, pandas
 - **Frontend**: 바닐라 HTML/CSS/JS (프레임워크 없음)
-- **ML**: 포지션별 XGBoost/LightGBM 회귀, `GroupShuffleSplit`/`GroupKFold` + early stopping,
-  Optuna 하이퍼파라미터 재탐색
+- **ML**: 포지션 원-핫 피처를 포함한 통합 XGBoost 회귀, `GroupShuffleSplit`/`GroupKFold`
+  + early stopping, Optuna 하이퍼파라미터 재탐색. 비교 실험으로 LightGBM, AutoGluon
+  (CatBoost/FastAI/PyTorch 포함 AutoML)도 검증함
 
 ## 폴더 구조
 ```

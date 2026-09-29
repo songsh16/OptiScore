@@ -18,26 +18,35 @@
   5. 리그 원-핫, 커리어 시즌차수, 2시즌 이동평균 3종 피처 추가 (backend/features.py).
   6. `ml/tune.py`로 선수 단위 GroupKFold 기준 하이퍼파라미터를 재탐색해서
      `LEGACY_XGB_PARAMS`(원래 랜덤 분할 기준으로 튜닝됐을 값)를 대체한다.
-     `ml/reports/best_params.json`이 있으면 그쪽을 자동으로 쓴다 (없으면
-     LEGACY_XGB_PARAMS로 대체).
   7. 포지션별로 XGBoost/LightGBM 중 GroupKFold CV R²가 더 높은 쪽을 채택한다.
 
 평가 방법론 3라운드:
-  8. 측면 미드필더처럼 표본이 작은 포지션은 단일 `GroupShuffleSplit` 하나로 평가하면
-     random_state만 바꿔도 R²가 4%~56%까지 흔들린다는 걸 실제로 확인했다. 그래서
-     "공식" 성능 지표(`results[position]["cv_split"]`)는 GroupKFold 4-fold 평균으로
-     바꿨다. 단일 분할(`grouped_split`)은 저장할 모델 하나를 고르고 피처 중요도/오차
-     분석 예시를 뽑는 용도로만 쓴다. 자세한 내용은 model_evaluation.md -1절.
+  8. 표본이 작은 포지션은 단일 `GroupShuffleSplit` 하나로 평가하면 random_state만
+     바꿔도 R²가 4%~56%까지 흔들린다는 걸 실제로 확인했다. "공식" 성능 지표는
+     GroupKFold 4-fold 평균으로 바꿨다.
   9. `backend/features.py`의 `_denoise_side_midfielder()`로 측면 미드필더 포지션
-     라벨이 다른 시즌과 어긋나는 선수(9명, 13개 시즌)를 정리했지만, 교차검증 R²는
-     거의 변하지 않았다(45.8%→44.3%) — 근본 원인은 라벨 노이즈가 아니라 표본
-     부족이었다 (model_evaluation.md 5절).
+     라벨을 정리했지만 교차검증 R²는 거의 변하지 않았다 — 근본 원인은 라벨
+     노이즈가 아니라 표본 부족이었다.
+
+4라운드 — 포지션 통합 모델로 전환 (현재 기본값):
+  10. 포지션마다 모델을 따로 학습하는 대신, "포지션"을 원-핫 피처로 넣은
+      단일 통합 모델 하나로 바꿨다. 표본이 적은 포지션(특히 측면 미드필더)이
+      전체 11,637행에서 학습된 나이 곡선·리그 효과 등의 혜택을 받을 수 있어서,
+      8개 포지션 전부 개선됐다 (평균 GroupKFold R² 71.8% -> 77.3%, 측면
+      미드필더는 44.3% -> 65.1%). `ml/experiment_pooled.py`가 이 비교 실험,
+      `ml/tune_pooled.py`가 재탐색 스크립트다. 자세한 수치는
+      model_evaluation.md 참고. AutoGluon(CatBoost/신경망 포함 자동 앙상블)과도
+      비교했는데 근소하게 더 좋았지만(+0.8%p) 배포 복잡도 대비 이득이 작아
+      채택하지 않았다.
+  11. 기존 포지션별 전용 모델 학습 코드(`train_specialized`)는 이 비교의
+      "이전" 기준선으로 남겨뒀다 — 기본 실행 경로는 아니다.
 
 실행:
-    python ml/tune.py --trials 40    # (선택) 하이퍼파라미터 재탐색, 수십 분 소요
-    python ml/train.py               # 최종 모델 학습 + 저장
+    python ml/tune_pooled.py --trials 40   # (선택) 통합 모델 하이퍼파라미터 재탐색
+    python ml/train.py                     # 최종 통합 모델 학습 + 저장
+    python ml/train.py --specialized       # (비교용) 기존 포지션별 8개 모델 방식
 출력:
-    backend/models/model_bundle.pkl   ({포지션: {model, feature_cols, model_type}})
+    backend/models/model_bundle.pkl   ({model, feature_cols, model_type} — 단일 모델)
     data/player_with_pred.xlsx        (전체 선수에 대한 예측값 포함)
     ml/reports/results.json           (아래 model_evaluation.md 작성에 쓰는 원자료)
 """
@@ -109,6 +118,30 @@ def load_position_configs() -> dict:
         position: {"model_type": "xgboost", "params": params, "cv_r2": None}
         for position, params in LEGACY_XGB_PARAMS.items()
     }
+
+
+POOLED_BEST_PARAMS_PATH = ROOT / "ml" / "reports" / "best_params_pooled.json"
+
+# ml/tune_pooled.py 재탐색 결과가 없을 때의 fallback (ml/experiment_pooled.py에서
+# 기본값으로도 이미 8개 포지션 전부 개선을 확인한 값).
+POOLED_FALLBACK_PARAMS = dict(
+    n_estimators=800, max_depth=6, learning_rate=0.03,
+    subsample=0.8, colsample_bytree=0.8, min_child_weight=3,
+    reg_alpha=1e-3, reg_lambda=1e-2,
+)
+
+
+def load_pooled_config() -> dict:
+    if POOLED_BEST_PARAMS_PATH.exists():
+        with open(POOLED_BEST_PARAMS_PATH, encoding="utf-8") as f:
+            tuned = json.load(f)
+        best_type = max(tuned, key=lambda t: tuned[t]["macro_r2"])
+        return {
+            "model_type": best_type,
+            "params": tuned[best_type]["params"],
+            "macro_r2": tuned[best_type]["macro_r2"],
+        }
+    return {"model_type": "xgboost", "params": POOLED_FALLBACK_PARAMS, "macro_r2": None}
 
 
 def load_raw() -> pd.DataFrame:
@@ -230,7 +263,130 @@ def _eval_grouped_split(X: pd.DataFrame, y: pd.Series, groups: pd.Series, model_
     return model, metrics, imp_df, err_df
 
 
-def train_all(df: pd.DataFrame) -> dict:
+def _cv_metrics_pooled(X, y, groups, position_labels, model_type, params) -> dict:
+    """_cv_metrics의 통합 모델 버전 — fold마다 포지션별로도 R²를 슬라이스한다."""
+    gkf = GroupKFold(n_splits=N_CV_FOLDS)
+    overall_r2 = []
+    by_position = {p: [] for p in features.POSITION_GROUPS}
+
+    for train_idx, test_idx in gkf.split(X, y, groups):
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+        groups_train = groups.iloc[train_idx]
+        pos_test = position_labels.iloc[test_idx]
+
+        inner = GroupShuffleSplit(test_size=0.15, n_splits=1, random_state=0)
+        fit_idx, val_idx = next(inner.split(X_train, y_train, groups_train))
+        X_fit, X_val = X_train.iloc[fit_idx], X_train.iloc[val_idx]
+        y_fit, y_val = y_train.iloc[fit_idx], y_train.iloc[val_idx]
+
+        model, fit_kwargs = MODEL_FACTORIES[model_type](params, X_val, y_val)
+        model.fit(X_fit, y_fit, **fit_kwargs)
+        log_pred = model.predict(X_test)
+
+        overall_r2.append(r2_score(y_test, log_pred))
+        for pos in features.POSITION_GROUPS:
+            mask = (pos_test == pos).values
+            if mask.sum() >= 5:
+                by_position[pos].append(r2_score(y_test[mask], log_pred[mask]))
+
+    return {
+        "overall_r2_mean": float(np.mean(overall_r2)),
+        "by_position": {
+            pos: {"r2_mean": float(np.mean(v)), "r2_std": float(np.std(v))}
+            for pos, v in by_position.items() if v
+        },
+        "n_folds": N_CV_FOLDS,
+    }
+
+
+def _eval_grouped_split_pooled(X, y, groups, position_labels, model_type, params):
+    """_eval_grouped_split의 통합 모델 버전 — 저장할 모델 하나 + 포지션별 오차 분석."""
+    splitter = GroupShuffleSplit(test_size=0.2, n_splits=1, random_state=42)
+    train_idx, test_idx = next(splitter.split(X, y, groups))
+    X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+    y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+    groups_train = groups.iloc[train_idx]
+    pos_test = position_labels.iloc[test_idx]
+
+    inner_splitter = GroupShuffleSplit(test_size=0.15, n_splits=1, random_state=42)
+    fit_idx, val_idx = next(inner_splitter.split(X_train, y_train, groups_train))
+    X_fit, X_val = X_train.iloc[fit_idx], X_train.iloc[val_idx]
+    y_fit, y_val = y_train.iloc[fit_idx], y_train.iloc[val_idx]
+
+    model, fit_kwargs = MODEL_FACTORIES[model_type](params, X_val, y_val)
+    model.fit(X_fit, y_fit, **fit_kwargs)
+
+    log_pred_test = model.predict(X_test)
+    y_pred = np.expm1(log_pred_test)
+    y_true = np.expm1(y_test)
+
+    raw_importances = np.asarray(model.feature_importances_, dtype=float)
+    total = raw_importances.sum()
+    normalized = raw_importances / total if total > 0 else raw_importances
+    importances = sorted(zip(normalized, X.columns), reverse=True)
+    imp_df = pd.DataFrame(importances, columns=["importance", "feature"]).head(15)
+
+    err_df = X_test.copy()
+    err_df["포지션"] = pos_test.values
+    err_df["실제_가치"] = y_true.values
+    err_df["예측_가치"] = y_pred
+    err_df["오차"] = err_df["예측_가치"] - err_df["실제_가치"]
+
+    return model, imp_df, err_df
+
+
+def train_pooled(df: pd.DataFrame) -> tuple[dict, dict]:
+    """
+    현재 기본 학습 경로: 포지션을 원-핫 피처로 넣은 단일 통합 모델 하나를
+    학습한다 (ml/experiment_pooled.py에서 8개 포지션 전부 개선을 확인함).
+    """
+    config = load_pooled_config()
+    model_type, params = config["model_type"], config["params"]
+    X, y = _make_xy(df)
+    groups = df["name_key"]
+    position_labels = df["포지션_그룹"]
+
+    print(f"통합 모델 [{model_type}] 학습 중... (n={len(df)}, 피처 {X.shape[1]}개)")
+    naive_metrics = _eval_naive_split(X, y, model_type, params)
+    cv_metrics = _cv_metrics_pooled(X, y, groups, position_labels, model_type, params)
+    model, imp_df, err_df = _eval_grouped_split_pooled(X, y, groups, position_labels, model_type, params)
+
+    bundle = {"model": model, "feature_cols": list(X.columns), "model_type": model_type}
+
+    by_position = {}
+    for pos in features.POSITION_GROUPS:
+        pos_err = err_df[err_df["포지션"] == pos]
+        if len(pos_err) == 0:
+            continue
+        by_position[pos] = {
+            "n_rows": int((df["포지션_그룹"] == pos).sum()),
+            "cv_split": cv_metrics["by_position"].get(pos),
+            "overrated_top5": pos_err.sort_values("오차", ascending=False)
+                .assign(선수명=df.loc[pos_err.index, "name_key"])[["선수명", "실제_가치", "예측_가치", "오차"]]
+                .head(5).to_dict("records"),
+            "underrated_top5": pos_err.sort_values("오차", ascending=True)
+                .assign(선수명=df.loc[pos_err.index, "name_key"])[["선수명", "실제_가치", "예측_가치", "오차"]]
+                .head(5).to_dict("records"),
+        }
+        print(f"  {pos}: CV R²={cv_metrics['by_position'][pos]['r2_mean']:.2%} (±{cv_metrics['by_position'][pos]['r2_std']:.2%})")
+
+    results = {
+        "architecture": "pooled",
+        "model_type": model_type,
+        "tuning_macro_r2": config["macro_r2"],
+        "naive_split": naive_metrics,
+        "overall_cv_r2": cv_metrics["overall_r2_mean"],
+        "macro_cv_r2": float(np.mean([v["r2_mean"] for v in cv_metrics["by_position"].values()])),
+        "top_features": imp_df.to_dict("records"),
+        "by_position": by_position,
+    }
+    print(f"\n랜덤분할 R²={naive_metrics['r2']:.2%} | 전체 풀링 CV R²={cv_metrics['overall_r2_mean']:.2%} | 포지션별 평균 CV R²={results['macro_cv_r2']:.2%}")
+
+    return bundle, results
+
+
+def train_specialized(df: pd.DataFrame) -> dict:
     results = {}
     bundle = {}
     position_configs = load_position_configs()
@@ -276,7 +432,14 @@ def train_all(df: pd.DataFrame) -> dict:
     return bundle, results
 
 
-def predict_all(df: pd.DataFrame, bundle: dict) -> pd.DataFrame:
+def predict_all_pooled(df: pd.DataFrame, bundle: dict) -> pd.DataFrame:
+    X = df[bundle["feature_cols"]].fillna(0)
+    df = df.copy()
+    df["Predicted market value"] = np.expm1(bundle["model"].predict(X))
+    return df
+
+
+def predict_all_specialized(df: pd.DataFrame, bundle: dict) -> pd.DataFrame:
     preds = np.full(len(df), np.nan)
     for position, info in bundle.items():
         mask = (df["포지션_그룹"] == position).values
@@ -305,20 +468,26 @@ def build_prediction_excel(raw_df: pd.DataFrame, pred_df: pd.DataFrame) -> pd.Da
     return raw_df.merge(predictions, on=["Name", "Season"], how="left")
 
 
-def main():
+def main(specialized: bool = False):
     print("데이터 로딩/전처리...")
     raw = load_raw()
     df = features.engineer_batch(features.load_and_clean(raw))
     print(f"학습 대상: {len(df)}건, {df['name_key'].nunique()}명\n")
 
-    bundle, results = train_all(df)
+    if specialized:
+        bundle, results = train_specialized(df)
+        pred_df = predict_all_specialized(df, bundle)
+        n_models = len(bundle)
+    else:
+        bundle, results = train_pooled(df)
+        pred_df = predict_all_pooled(df, bundle)
+        n_models = 1
 
     BUNDLE_PATH.parent.mkdir(parents=True, exist_ok=True)
     import joblib
     joblib.dump(bundle, BUNDLE_PATH)
-    print(f"\n모델 번들 저장: {BUNDLE_PATH} ({len(bundle)}개 포지션)")
+    print(f"\n모델 번들 저장: {BUNDLE_PATH} ({n_models}개 모델)")
 
-    pred_df = predict_all(df, bundle)
     out = build_prediction_excel(raw, pred_df)
     out.to_excel(PRED_PATH, index=False)
     print(f"예측 결과 저장: {PRED_PATH}")
@@ -330,4 +499,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--specialized", action="store_true",
+        help="포지션별 전용 모델 8개 (이전 방식, 비교용). 기본값은 통합 모델.",
+    )
+    args = parser.parse_args()
+    main(specialized=args.specialized)
