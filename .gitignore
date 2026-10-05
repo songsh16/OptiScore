@@ -19,3 +19,8 @@ Thumbs.db
 
 # 환경변수
 .env
+
+# 개인 회의 자료/진행 메모 (로컬 보관만, 저장소에는 올리지 않음)
+docs/archive/ppt/
+docs/archive/progress-notes/
+docs/archive/_deprecated/chrolling/Fotmob_크롤링_진행계획서.docx
